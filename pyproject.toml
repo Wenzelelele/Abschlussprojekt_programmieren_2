@@ -5,6 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "altair>=6.2.1",
+    "gpxpy>=1.6.2",
+    "pandas>=3.0.3",
     "plotly>=6.8.0",
+    "pydeck>=0.9.2",
     "streamlit>=1.58.0",
 ]
