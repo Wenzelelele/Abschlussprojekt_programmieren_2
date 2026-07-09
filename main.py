@@ -1,5 +1,6 @@
 import streamlit as st
 
+from functions.ui_theme import apply_custom_theme
 from functions.user_profil import create_user_file
 from views.profil import (
     init_login_state,
@@ -15,6 +16,7 @@ st.set_page_config(
     page_icon=":mountain:",
     layout="wide",
 )
+apply_custom_theme()
 
 
 def init_route_test_data():

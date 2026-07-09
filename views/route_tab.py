@@ -171,7 +171,7 @@ def render_route_tab():
     if "last_changed" not in st.session_state:
         st.session_state["last_changed"] = "zone"
     if "selected_zone" not in st.session_state:
-        st.session_state["selected_zone"] = "Z3"
+        st.session_state["selected_zone"] = "Z2"
     if "selected_minutes" not in st.session_state:
         st.session_state["selected_minutes"] = 30
     if "selected_seconds" not in st.session_state:
