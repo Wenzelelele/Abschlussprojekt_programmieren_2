@@ -29,8 +29,10 @@ ERWARTETE EINGABE (von eurem "data"-Baustein, in st.session_state):
 import streamlit as st
 import pydeck as pdk
 import pandas as pd
+import plotly.graph_objects as go
 
 from data.gpx_processing import parse_gpx, resample_route
+from functions.fit_export import build_fit_workout
 from functions.pace_model import (
     HR_ZONES,
     compute_ef_factors,
@@ -97,6 +99,26 @@ def _on_zone_change():
 def _on_time_change():
     st.session_state["last_changed"] = "time"
 
+def _pace_to_color(pace, p_min, p_max):
+    """
+    Wandelt eine Pace (sec/km) in eine RGB-Farbe um: gruen (schnell) ->
+    gelb (mittel) -> rot (langsam). Wird sowohl von der Karte als auch
+    vom Hoehenprofil genutzt, damit beide Visualisierungen exakt dieselbe
+    Farblogik verwenden.
+    """
+
+ 
+    if pd.isna(pace) or p_max == p_min:
+        return [255, 184, 28]
+    t = (pace - p_min) / (p_max - p_min)
+    t = max(0.0, min(1.0, t))
+    fast, mid, slow = [0, 168, 107], [255, 184, 28], [220, 50, 50]
+    if t < 0.5:
+        t2 = t / 0.5
+        return [int(a + (b - a) * t2) for a, b in zip(fast, mid)]
+    t2 = (t - 0.5) / 0.5
+    return [int(a + (b - a) * t2) for a, b in zip(mid, slow)]
+
 
 def render_route_tab():
     st.subheader("Streckenplanung")
@@ -156,6 +178,8 @@ def render_route_tab():
         st.session_state["selected_seconds"] = 0
 
     error_message = None
+    result_segments = None
+    chosen_zone = None
 
     # Zuerst auf Basis von "last_changed" die fehlende Seite berechnen,
     # BEVOR die Widgets gezeichnet werden - so zeigen die Widgets sofort
@@ -179,12 +203,9 @@ def render_route_tab():
 
         if result["is_too_ambitious"]:
             error_message = result["ambition_message"]
-            result_segments = None
-            chosen_zone = None
-        else:
-            st.session_state["selected_zone"] = result["chosen_zone"]
-            result_segments = result["segments"]
-            chosen_zone = result["chosen_zone"]
+
+        result_segments = result["segments"]
+        chosen_zone = result["chosen_zone"]
 
     # -------------------------------------------------------------
     # Schritt D: die zwei Auswahlboxen (UEBER der Karte, wie gefordert)
@@ -216,14 +237,16 @@ def render_route_tab():
     # -------------------------------------------------------------
     # Schritt E: Fehleranzeige bei zu ambitionierter Zielzeit
     # -------------------------------------------------------------
+
+
     if error_message:
         st.error(error_message)
-        return
+    
 
     if result_segments is None or result_segments.empty:
         st.warning("Keine ausreichenden Trainingsdaten für eine Schätzung vorhanden.")
-        return
-
+        return      
+     
     total_sec_final = total_time_for_zone(result_segments)
     st.success(
         f"**{HR_ZONE_LABELS.get(chosen_zone, chosen_zone)}** → Gesamtzeit ca. "
@@ -231,55 +254,75 @@ def render_route_tab():
     )
 
     # -------------------------------------------------------------
-    # Schritt F: Karte + Slider mit bewegtem Punkt
+    # Schritt F: Slider zuerst (wird von Karte UND Hoehenprofil genutzt)
     # -------------------------------------------------------------
-    _render_map_with_slider(result_segments)
+    marker_idx = st.slider("Streckenabschnitt", 0, len(result_segments) - 1, 0)
+    marker_row = result_segments.iloc[marker_idx]
+ 
+    # -------------------------------------------------------------
+    # Schritt G: Karte (links) und Hoehenprofil (rechts), synchron
+    # zum selben Slider/marker_idx
+    # -------------------------------------------------------------
+    map_col, profile_col = st.columns(2)
+ 
+    with map_col:
+        _render_map(result_segments, marker_idx)
+ 
+    with profile_col:
+        _render_elevation_profile(result_segments, marker_idx)
+ 
+    mc1, mc2, mc3 = st.columns(3)
+    mc1.metric("Position", f"{marker_row['mid_m']/1000:.2f} km")
+    mc2.metric("Steigung", f"{marker_row['grade_pct']:+.1f} %")
+    mc3.metric("Ziel-Pace", _format_pace(marker_row["pace_sec_per_km"]))
+ 
+    # -------------------------------------------------------------
+    # Schritt H: FIT-Workout-Export fuer Garmin Connect
+    # -------------------------------------------------------------
 
-
-def _render_map_with_slider(segments):
-    """Karte mit farbcodierter Pace-Linie + Slider, der einen Punkt entlang
-    der Strecke bewegt. Direkt unter dem GPX-Upload sichtbar"""
-  
-
+    workout_name_input = st.text_input(
+        "Name des Workouts (max. 15 Zeichen)",
+        value=route.name,
+        max_chars=15,
+    )
+ 
+    fit_bytes = build_fit_workout(result_segments, workout_name=workout_name_input)
+    st.download_button(
+        "FIT-Workout herunterladen",
+        data=fit_bytes,
+        file_name=f"{workout_name_input.replace(' ', '_')}.fit",
+        mime="application/octet-stream",
+    )
+ 
+def _render_map(segments, marker_idx):
+    """Karte mit farbcodierter Pace-Linie + Punkt an der Slider-Position."""
+    import pydeck as pdk
+ 
     p_min = segments["pace_sec_per_km"].min()
     p_max = segments["pace_sec_per_km"].max()
-
-    def pace_to_color(pace):
-        if pd.isna(pace) or p_max == p_min:
-            return [255, 184, 28]
-        t = (pace - p_min) / (p_max - p_min)
-        t = max(0.0, min(1.0, t))
-        fast, mid, slow = [0, 168, 107], [255, 184, 28], [220, 50, 50]
-        if t < 0.5:
-            t2 = t / 0.5
-            return [int(a + (b - a) * t2) for a, b in zip(fast, mid)]
-        t2 = (t - 0.5) / 0.5
-        return [int(a + (b - a) * t2) for a, b in zip(mid, slow)]
-
+ 
     path_data = []
     for i in range(len(segments) - 1):
         row_a = segments.iloc[i]
         row_b = segments.iloc[i + 1]
         path_data.append({
             "path": [[row_a["lon"], row_a["lat"]], [row_b["lon"], row_b["lat"]]],
-            "color": pace_to_color(row_a["pace_sec_per_km"]),
+            "color": _pace_to_color(row_a["pace_sec_per_km"], p_min, p_max),
         })
-
+ 
     path_layer = pdk.Layer(
         "PathLayer", data=path_data, get_path="path", get_color="color",
         width_min_pixels=5, pickable=False,
     )
-
-    marker_idx = st.slider("Streckenabschnitt", 0, len(segments) - 1, 0)
+ 
     marker_row = segments.iloc[marker_idx]
-
     marker_layer = pdk.Layer(
         "ScatterplotLayer",
         data=[{"lat": marker_row["lat"], "lon": marker_row["lon"]}],
         get_position=["lon", "lat"], get_fill_color=[30, 30, 220],
         get_radius=35, radius_min_pixels=9, radius_max_pixels=22,
     )
-
+ 
     view_state = pdk.ViewState(
         latitude=segments["lat"].mean(), longitude=segments["lon"].mean(),
         zoom=13, pitch=0,
@@ -289,8 +332,98 @@ def _render_map_with_slider(segments):
         map_provider="carto", map_style="light",
     )
     st.pydeck_chart(deck, use_container_width=True)
+ 
+ 
+def _render_elevation_profile(segments, marker_idx):
+    """
+    Hoehenprofil (Hoehe ueber Distanz), eingefaerbt nach Pace wie die
+    Karte, mit einer vertikalen Linie + Punkt an der Slider-Position.
+ 
+    WICHTIG zum Verstehen: Das Hoehenprofil bekommt KEINEN eigenen
+    Slider. Es nutzt denselben marker_idx, der weiter oben aus dem
+    EINEN gemeinsamen Slider kommt - dadurch bewegen sich Karten-Punkt
+    und Hoehenprofil-Punkt automatisch synchron, ohne dass wir die
+    beiden manuell verknuepfen muessen.
+    """
+    
+ 
+    p_min = segments["pace_sec_per_km"].min()
+    p_max = segments["pace_sec_per_km"].max()
+ 
+    x_km = segments["mid_m"] / 1000.0
+    y_ele = segments["ele"]
+ 
+    fig = go.Figure()
+ # Y-Achsen-Range vorab berechnen, damit wir die Flaeche bis zur
+    # unteren Achsengrenze zeichnen koennen (statt bis 0, was bei
+    # typischen Hoehenwerten weit ausserhalb des sichtbaren Bereichs liegt).
+    ele_min = y_ele.min()
+    ele_max = y_ele.max()
+    ele_span = max(ele_max - ele_min, 1.0)  # mind. 1m, falls komplett flach
+    padding = ele_span * 0.6
+    y_axis_bottom = ele_min - padding
+    y_axis_top = ele_max + padding
 
-    mc1, mc2, mc3 = st.columns(3)
-    mc1.metric("Position", f"{marker_row['mid_m']/1000:.2f} km")
-    mc2.metric("Steigung", f"{marker_row['grade_pct']:+.1f} %")
-    mc3.metric("Ziel-Pace", _format_pace(marker_row["pace_sec_per_km"]))
+    # Flaeche unter der Linie (dezent, fuer den "Bergprofil"-Look).
+    # Zuerst gezeichnet, damit sie im Hintergrund liegt. Die Baseline
+    # liegt am unteren Rand des sichtbaren Achsenbereichs, nicht bei 0 -
+    # sonst wuerde die Flaeche (und damit die automatische Skalierung)
+    # bis runter auf 0m reichen, was die Hoehenlinie nach oben quetscht.
+    fig.add_trace(go.Scatter(
+        x=x_km, y=[y_axis_bottom] * len(x_km),
+        mode="lines", line=dict(width=0),
+        showlegend=False, hoverinfo="skip",
+    ))
+    fig.add_trace(go.Scatter(
+        x=x_km, y=y_ele, mode="lines",
+        line=dict(width=0), fill="tonexty",
+        fillcolor="rgba(120,120,120,0.10)",
+        showlegend=False, hoverinfo="skip",
+    ))
+    # Hoehenlinie in vielen kurzen, farbigen Teilstuecken zeichnen, damit
+    # jedes Segment seine eigene Pace-Farbe bekommt (Plotly kennt keine
+    # "Farbverlauf pro Punkt" Option fuer eine einzelne Linie, deshalb
+    # bauen wir sie aus einzelnen Liniensegmenten zusammen).
+    for i in range(len(segments) - 1):
+        color = _pace_to_color(segments["pace_sec_per_km"].iloc[i], p_min, p_max)
+        color_str = f"rgb({color[0]},{color[1]},{color[2]})"
+        fig.add_trace(go.Scatter(
+            x=[x_km.iloc[i], x_km.iloc[i + 1]],
+            y=[y_ele.iloc[i], y_ele.iloc[i + 1]],
+            mode="lines",
+            line=dict(color=color_str, width=4),
+            showlegend=False,
+            hoverinfo="skip",
+        ))
+ 
+    # Flaeche unter der Linie (dezent, fuer den "Bergprofil"-Look)
+    fig.add_trace(go.Scatter(
+        x=x_km, y=y_ele, mode="lines",
+        line=dict(width=0), fill="tozeroy",
+        fillcolor="rgba(120,120,120,0.10)",
+        showlegend=False, hoverinfo="skip",
+    ))
+ 
+    # Vertikale Linie + Punkt an der aktuellen Slider-Position
+    marker_row = segments.iloc[marker_idx]
+    fig.add_vline(
+        x=marker_row["mid_m"] / 1000.0,
+        line_width=2, line_dash="dash", line_color="rgb(30,30,220)",
+    )
+    fig.add_trace(go.Scatter(
+        x=[marker_row["mid_m"] / 1000.0], y=[marker_row["ele"]],
+        mode="markers",
+        marker=dict(size=12, color="rgb(30,30,220)"),
+        showlegend=False, hoverinfo="skip",
+    ))
+ 
+    fig.update_layout(
+        height=400,
+        margin=dict(l=10, r=10, t=10, b=10),
+        xaxis_title="Distanz (km)",
+        yaxis_title="Höhe (m)",
+        yaxis=dict(range=[y_axis_bottom, y_axis_top]),
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+ 
+    st.plotly_chart(fig, use_container_width=True)

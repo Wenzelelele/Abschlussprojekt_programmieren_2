@@ -1,7 +1,7 @@
 """
 pace_model.py
 -------------
-Effizienz-Korrektur aus den 3 Efficiency-Factor-Werten
+Schritt 1: Effizienz-Korrektur aus den 3 Efficiency-Factor-Werten
 (bergauf / flach / bergab).
 
 GRUNDIDEE:
@@ -29,7 +29,6 @@ Wichtig: ein Faktor > 1 bedeutet "stark" und muss die Pace SCHNELLER machen
 (also die Sekunden pro Kilometer verkleinern) - deshalb teilen wir die Pace
 durch den Faktor, statt zu multiplizieren (siehe Schritt 2).
 """
-
 
 
 def compute_ef_factors(ef_up: float, ef_flat: float, ef_down: float) -> dict:
@@ -253,10 +252,15 @@ def estimate_zone_for_target_time(
 
     Rueckgabe: {
         "is_too_ambitious": bool,
-        "ambition_message": str,           # falls zu ambitioniert
-        "chosen_zone": str | None,         # z.B. "Z3"
-        "segments": DataFrame | None,      # finale Pace pro Segment
+        "ambition_message": str,      # falls zu ambitioniert
+        "chosen_zone": str,           # gewaehlte ODER naechstgelegene erreichbare Zone
+        "segments": DataFrame,        # Pace pro Segment fuer chosen_zone
     }
+    WICHTIG: auch wenn is_too_ambitious=True ist, sind chosen_zone und
+    segments NICHT None - sie enthalten dann die naechstgelegene
+    tatsaechlich erreichbare Zone (Z5 bei zu schnellem, Z1 bei zu
+    langsamem Ziel), damit die App (Karte, Slider, Export) trotz der
+    Warnung weiter nutzbar bleibt, statt komplett zu stoppen.
     """
     all_zones = compute_all_zone_times(segments, pace_hr_bins, ef_factors)
 
@@ -274,10 +278,14 @@ def estimate_zone_for_target_time(
                 f"intensivsten bisherigen Trainingszone (Z5) würdest du für "
                 f"diese Strecke etwa {fastest_time/60:.1f} Minuten brauchen - "
                 f"das ist {margin_pct:.0f}% langsamer als dein Ziel. Diese "
-                f"Schätzung liegt außerhalb deiner bisherigen Trainingsdaten."
+                f"Schätzung liegt außerhalb deiner bisherigen Trainingsdaten. "
+                f"Die Karte unten zeigt deshalb die Pace für deine schnellste "
+                f"bisherige Trainingszone (Z5) als Annäherung."
             ),
-            "chosen_zone": None,
-            "segments": None,
+            # Fallback: die schnellste tatsaechlich belegte Zone anzeigen,
+            # statt gar nichts anzuzeigen - die App bleibt so nutzbar.
+            "chosen_zone": "Z5",
+            "segments": all_zones["Z5"]["segments"],
         }
 
     # Fall 2: sehr langsames Ziel (langsamer als die eigene lockerste Zone Z1)
@@ -288,10 +296,13 @@ def estimate_zone_for_target_time(
                 f"Diese Zielzeit ist langsamer als deine bisherige lockerste "
                 f"Trainingszone (Z1, ca. {slowest_time/60:.1f} Minuten für diese "
                 f"Strecke). Die Schätzung liegt außerhalb deiner bisherigen "
-                f"Trainingsdaten."
+                f"Trainingsdaten. Die Karte unten zeigt deshalb die Pace für "
+                f"deine lockerste bisherige Trainingszone (Z1) als Annäherung."
             ),
-            "chosen_zone": None,
-            "segments": None,
+            # Fallback: die langsamste tatsaechlich belegte Zone anzeigen,
+            # statt gar nichts anzuzeigen - die App bleibt so nutzbar.
+            "chosen_zone": "Z1",
+            "segments": all_zones["Z1"]["segments"],
         }
 
     # Fall 3: Zielzeit liegt im normalen Bereich - naechstgelegene Zone waehlen
