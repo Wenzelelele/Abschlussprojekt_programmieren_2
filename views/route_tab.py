@@ -1,8 +1,13 @@
 """
 route_tab.py
 ------------
-Der Streckenplanung-Tab: GPX-Upload, direkt darunter Karte+Slider,
-und zwei synchronisierte Auswahlboxen (HF-Zone / Zielzeit) darüber.
+Der Streckenplanung-Tab: oben ein Kopfbereich mit Routeninfo, Meldungen
+und der Farb-Legende ueber die volle Breite. Darunter vier Spalten:
+eine schmale, umrandete Panel-Spalte links fuer alle Eingaben (wirkt wie
+eine zweite Sidebar - Streamlit hat aber keine echte zweite native
+Sidebar), dann Karte, Hoehenprofil und rechts eine schmale Spalte mit
+den Pace-Metriken + FIT-Export - so ist alles ohne Scrollen auf einen
+Blick sichtbar.
 
 PRINZIP DER ZONE<->ZEIT SYNCHRONISIERUNG:
 Beide Eingabefelder sind gleichzeitig sichtbar. Über st.session_state
@@ -26,6 +31,8 @@ ERWARTETE EINGABE (von eurem "data"-Baustein, in st.session_state):
 """
 
 
+import io
+
 import streamlit as st
 import pydeck as pdk
 import pandas as pd
@@ -41,6 +48,7 @@ from functions.pace_model import (
     total_time_for_zone,
 )
 from functions.distance_check import check_distance_ambition
+from functions.route_storage import delete_route, get_routes_for_user, save_route
 
 
 HR_ZONE_LABELS = {
@@ -101,23 +109,53 @@ def _on_time_change():
 
 def _pace_to_color(pace, p_min, p_max):
     """
-    Wandelt eine Pace (sec/km) in eine RGB-Farbe um: gruen (schnell) ->
-    gelb (mittel) -> rot (langsam). Wird sowohl von der Karte als auch
+    Wandelt eine Pace (sec/km) in eine RGB-Farbe um: rot (schnell) ->
+    gelb (mittel) -> gruen (langsam). Wird sowohl von der Karte als auch
     vom Hoehenprofil genutzt, damit beide Visualisierungen exakt dieselbe
     Farblogik verwenden.
     """
 
- 
+
     if pd.isna(pace) or p_max == p_min:
         return [255, 184, 28]
     t = (pace - p_min) / (p_max - p_min)
     t = max(0.0, min(1.0, t))
-    fast, mid, slow = [0, 168, 107], [255, 184, 28], [220, 50, 50]
+    fast, mid, slow = [220, 50, 50], [255, 184, 28], [0, 168, 107]
     if t < 0.5:
         t2 = t / 0.5
         return [int(a + (b - a) * t2) for a, b in zip(fast, mid)]
     t2 = (t - 0.5) / 0.5
     return [int(a + (b - a) * t2) for a, b in zip(mid, slow)]
+
+
+def _render_pace_legend():
+    """Zeigt einen Farbverlauf-Balken, der die Pace-Einfaerbung von Karte
+    und Hoehenprofil erklaert (rot = schnell, gruen = langsam)."""
+    fast_r, fast_g, fast_b = 220, 50, 50
+    mid_r, mid_g, mid_b = 255, 184, 28
+    slow_r, slow_g, slow_b = 0, 168, 107
+
+    st.markdown(
+        f"""
+        <div style="margin: 0.25rem 0 1rem 0;">
+            <div style="
+                height: 12px;
+                border-radius: 6px;
+                background: linear-gradient(
+                    to right,
+                    rgb({fast_r},{fast_g},{fast_b}),
+                    rgb({mid_r},{mid_g},{mid_b}),
+                    rgb({slow_r},{slow_g},{slow_b})
+                );
+            "></div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                <span>Schnell</span>
+                <span>Langsam</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_route_tab():
@@ -134,36 +172,86 @@ def render_route_tab():
     )
     max_distance_km = st.session_state["max_distance_km"]
 
-    # -------------------------------------------------------------
-    # Schritt A: GPX-Upload - der EINZIGE Button vor dem Ergebnis
-    # -------------------------------------------------------------
-    uploaded_gpx = st.file_uploader("GPX-Datei der Strecke hochladen", type=["gpx"])
+    # Kopfbereich (Routeninfo/Meldungen/Farb-Legende) ueber die volle Breite,
+    # darunter vier Spalten: schmales Eingabe-Panel (wirkt wie eine zweite
+    # Sidebar - eine echte zweite native Sidebar gibt es in Streamlit nicht),
+    # Karte, Hoehenprofil und rechts eine schmale Spalte mit Pace-Metriken
+    # + Export-Button - so ist alles ohne Scrollen auf einen Blick sichtbar.
+    header = st.container()
+    control_col, map_col, profile_col, side_col = st.columns([1.6, 2, 2, 1])
 
-    if uploaded_gpx is None:
-        st.caption("Lade eine GPX-Datei hoch, um die Streckenplanung zu starten.")
-        return
+    with control_col:
+        control_panel = st.container(border=True)
+        control_panel.markdown("**Einstellungen**")
+
+    # -------------------------------------------------------------
+    # Schritt A: gespeicherte Route waehlen ODER neue GPX hochladen
+    # -------------------------------------------------------------
+    with control_panel:
+        st.caption("Route")
+
+        username = st.session_state.current_user
+        saved_routes = get_routes_for_user(username)
+
+        gpx_source = None
+
+        if saved_routes:
+            route_options = ["Neue Route hochladen"] + [
+                f"{r['route_name']} · {r['distance_km']} km · {r['uploaded_at'][:16]}"
+                for r in saved_routes
+            ]
+            chosen_option = st.selectbox("Gespeicherte Route", route_options)
+
+            if chosen_option != "Neue Route hochladen":
+                chosen_route = saved_routes[route_options.index(chosen_option) - 1]
+                gpx_source = io.StringIO(chosen_route["gpx_content"])
+
+                if st.button("Route löschen"):
+                    delete_route(chosen_route.doc_id)
+                    st.rerun()
+
+        if gpx_source is None:
+            uploaded_gpx = st.file_uploader("GPX-Datei der Strecke hochladen", type=["gpx"])
+
+            if uploaded_gpx is None:
+                st.caption("Lade eine GPX-Datei hoch, um die Streckenplanung zu starten.")
+                return
+
+            gpx_text = uploaded_gpx.getvalue().decode("utf-8")
+            save_route(username, uploaded_gpx.name, gpx_text)
+            gpx_source = io.StringIO(gpx_text)
 
     try:
-        route = parse_gpx(uploaded_gpx)
+        route = parse_gpx(gpx_source)
     except Exception as e:
-        st.error(f"Konnte GPX-Datei nicht lesen: {e}")
+        with header:
+            st.error(f"Konnte GPX-Datei nicht lesen: {e}")
         return
 
     segments = resample_route(route, segment_length_m=100.0)
     route_distance_km = route.total_distance_m / 1000.0
+
+    # Slider direkt nach der Routenauswahl im Panel - braucht nur die Anzahl
+    # der Segmente (unabhaengig von Zone/Zeit), kann also schon hier stehen,
+    # statt erst ganz unten im Panel.
+    with control_panel:
+        st.caption("Position auf der Strecke")
+        marker_idx = st.slider("Streckenabschnitt", 0, len(segments) - 1, 0)
 
     # -------------------------------------------------------------
     # Schritt B: Streckenlaengen-Check (unabhaengig von Zone/Zeit)
     # -------------------------------------------------------------
     distance_check = check_distance_ambition(route_distance_km, max_distance_km)
     if distance_check["is_too_ambitious"]:
-        st.error(distance_check["message"])
+        with header:
+            st.error(distance_check["message"])
         return
 
-    st.markdown(
-        f"**{route.name}** · {route_distance_km:.2f} km · "
-        f"⬆ {route.total_ascent_m:.0f} m · ⬇ {route.total_descent_m:.0f} m"
-    )
+    with header:
+        st.markdown(
+            f"**{route.name}** · {route_distance_km:.2f} km · "
+            f"⬆ {route.total_ascent_m:.0f} m · ⬇ {route.total_descent_m:.0f} m"
+        )
 
     # -------------------------------------------------------------
     # Schritt C: Zone <-> Zeit Synchronisierung
@@ -208,21 +296,19 @@ def render_route_tab():
         chosen_zone = result["chosen_zone"]
 
     # -------------------------------------------------------------
-    # Schritt D: die zwei Auswahlboxen (UEBER der Karte, wie gefordert)
+    # Schritt D: die zwei synchronisierten Auswahlboxen (Panel)
     # -------------------------------------------------------------
-    col1, col2 = st.columns(2)
+    with control_panel:
+        st.caption("Ziel")
 
-    with col1:
-        st.write("Ziel-HF-Zone")
         st.selectbox(
-            " ",
+            "Ziel-HF-Zone",
             options=HR_ZONES,
             format_func=lambda z: HR_ZONE_LABELS.get(z, z),
             key="selected_zone",
             on_change=_on_zone_change,
         )
 
-    with col2:
         st.write("Zielzeit")
         tc1, tc2 = st.columns(2)
         tc1.number_input(
@@ -235,64 +321,68 @@ def render_route_tab():
         )
 
     # -------------------------------------------------------------
-    # Schritt E: Fehleranzeige bei zu ambitionierter Zielzeit
+    # Schritt E: Fehleranzeige bei zu ambitionierter Zielzeit + Legende
     # -------------------------------------------------------------
+    with header:
+        if error_message:
+            st.error(error_message)
 
+        if result_segments is None or result_segments.empty:
+            st.warning("Keine ausreichenden Trainingsdaten für eine Schätzung vorhanden.")
+            return
 
-    if error_message:
-        st.error(error_message)
-    
+        total_sec_final = total_time_for_zone(result_segments)
+        st.success(
+            f"**{HR_ZONE_LABELS.get(chosen_zone, chosen_zone)}** → Gesamtzeit ca. "
+            f"**{_format_time(total_sec_final)}**"
+        )
 
-    if result_segments is None or result_segments.empty:
-        st.warning("Keine ausreichenden Trainingsdaten für eine Schätzung vorhanden.")
-        return      
-     
-    total_sec_final = total_time_for_zone(result_segments)
-    st.success(
-        f"**{HR_ZONE_LABELS.get(chosen_zone, chosen_zone)}** → Gesamtzeit ca. "
-        f"**{_format_time(total_sec_final)}**"
-    )
+        _render_pace_legend()
 
-    # -------------------------------------------------------------
-    # Schritt F: Slider zuerst (wird von Karte UND Hoehenprofil genutzt)
-    # -------------------------------------------------------------
-    marker_idx = st.slider("Streckenabschnitt", 0, len(result_segments) - 1, 0)
     marker_row = result_segments.iloc[marker_idx]
- 
+
     # -------------------------------------------------------------
-    # Schritt G: Karte (links) und Hoehenprofil (rechts), synchron
-    # zum selben Slider/marker_idx
+    # Schritt G: Karte, Hoehenprofil und rechte Spalte mit Pace-Metriken
+    # + Export, alle synchron zum selben Slider/marker_idx
     # -------------------------------------------------------------
-    map_col, profile_col = st.columns(2)
- 
     with map_col:
         _render_map(result_segments, marker_idx)
- 
+
     with profile_col:
         _render_elevation_profile(result_segments, marker_idx)
- 
-    mc1, mc2, mc3 = st.columns(3)
-    mc1.metric("Position", f"{marker_row['mid_m']/1000:.2f} km")
-    mc2.metric("Steigung", f"{marker_row['grade_pct']:+.1f} %")
-    mc3.metric("Ziel-Pace", _format_pace(marker_row["pace_sec_per_km"]))
- 
-    # -------------------------------------------------------------
-    # Schritt H: FIT-Workout-Export fuer Garmin Connect
-    # -------------------------------------------------------------
 
-    workout_name_input = st.text_input(
-        "Name des Workouts (max. 15 Zeichen)",
-        value=route.name,
-        max_chars=15,
-    )
- 
-    fit_bytes = build_fit_workout(result_segments, workout_name=workout_name_input)
-    st.download_button(
-        "FIT-Workout herunterladen",
-        data=fit_bytes,
-        file_name=f"{workout_name_input.replace(' ', '_')}.fit",
-        mime="application/octet-stream",
-    )
+    with side_col:
+        with st.container(key="route_pace_metrics"):
+            st.html(
+                """
+                <style>
+                .st-key-route_pace_metrics [data-testid="stMetricValue"] { font-size: 1.3rem; }
+                .st-key-route_pace_metrics [data-testid="stMetricLabel"] { font-size: 0.8rem; }
+                </style>
+                """
+            )
+            st.metric("Position", f"{marker_row['mid_m']/1000:.2f} km")
+            st.metric("Steigung", f"{marker_row['grade_pct']:+.1f} %")
+            st.metric("Ziel-Pace", _format_pace(marker_row["pace_sec_per_km"]))
+
+        st.divider()
+
+        # -----------------------------------------------------------
+        # Schritt H: FIT-Workout-Export fuer Garmin Connect
+        # -----------------------------------------------------------
+        workout_name_input = st.text_input(
+            "Name des Workouts (max. 15 Zeichen)",
+            value=route.name,
+            max_chars=15,
+        )
+
+        fit_bytes = build_fit_workout(result_segments, workout_name=workout_name_input)
+        st.download_button(
+            "FIT-Workout herunterladen",
+            data=fit_bytes,
+            file_name=f"{workout_name_input.replace(' ', '_')}.fit",
+            mime="application/octet-stream",
+        )
  
 def _render_map(segments, marker_idx):
     """Karte mit farbcodierter Pace-Linie + Punkt an der Slider-Position."""

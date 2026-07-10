@@ -88,6 +88,14 @@ def apply_custom_theme() -> None:
             color: #f5f1e8;
         }}
 
+        /* Eingabefelder haben einen hellen eigenen Hintergrund - dort muss
+           der Text dunkel bleiben, sonst ist er auf hell/hell unsichtbar. */
+        [data-testid="stSidebar"] input,
+        [data-testid="stSidebar"] textarea,
+        [data-testid="stSidebar"] [data-baseweb="select"] * {{
+            color: #20262b;
+        }}
+
         [data-testid="stSidebarNav"] a {{
             display: block;
             margin: 0.35rem 0.9rem;
