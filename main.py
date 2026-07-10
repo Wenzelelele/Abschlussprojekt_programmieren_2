@@ -37,11 +37,18 @@ def init_route_test_data():
         st.session_state["ef_down"] = 1.20
         st.session_state["max_distance_km"] = 10.0
 
+col_left, col_right= st.columns([6,1])
 
-def route_page():
-    init_route_test_data()
-    render_route_tab()
+with col_right:
+    with st.popover("Support"):
+        st.write("Kundenservice 24/7")
+        st.write("E-Mail: bergläufer24@gmail.com")
+        st.write("Telefon: +43 664 12345678")
 
+if not st.session_state.logged_in:        #wenn niemand eingeloggt ist
+    def route_page():
+        init_route_test_data()
+        render_route_tab()
 
 create_user_file()
 init_login_state()
@@ -53,6 +60,15 @@ if not st.session_state.logged_in:
         register_page()
 
 else:
+    logout_button()  
+    st.sidebar.title("Navigation")      #Titel in der Sidebar
+
+    selected_page = st.sidebar.radio(   #Auswahlmenü in der Sidebar
+        "Seite auswählen",
+        ["Profil", "Training", "Analyse"])
+
+    if selected_page == "Profil":   #wenn Profil ausgewählt wurde
+        show_profile()              #Profil anzeigen
     logout_button()
 
     pg = st.navigation(

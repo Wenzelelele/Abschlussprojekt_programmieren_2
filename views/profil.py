@@ -28,7 +28,8 @@ def login_page():
         else:
             st.error("Benutzername oder Passwort ist falsch.")  #Fehlermeldung
 
-    st.divider()  
+    st.divider() 
+
     st.write("Noch kein Profil?")  
     if st.button("Profil erstellen"):                           #Button zur Registrierung
         st.session_state.page = "register"                      #wechselt zur Register-Seite
@@ -62,9 +63,7 @@ def register_page():
         
         else:
             save_users(username, password, name, age, height, weight, level, max_hr)  #Benutzer speichern
-
             st.success("Profil wurde erfolgreich erstellt!")  #Erfolgsmeldung
-
             st.session_state.logged_in = True                 #direkt einloggen
             st.session_state.current_user = username          #Benutzer merken
             st.rerun()  
@@ -82,15 +81,18 @@ def logout_button(): #Button zum ausloggen
         st.session_state.page = "login"         #App springt zurück zur Login-Seite
         st.rerun()  
 
-def show_profile(): #zeigt das Profil des eingeloggten Nutzers an
+def show_profile(): #zeigt das Profil 
     
     user = get_user_data(st.session_state.current_user)  #lädt die Daten des aktuell eingeloggten Benutzers
 
-    st.title("Dein Profil")  
-
     if user is None:  # prüft, ob kein Benutzer gefunden wurde
         st.error("Benutzer konnte nicht gefunden werden.")  
-        return  
+        return    
+    
+    height_m = float(user["height"]) / 100
+    bmi = float(user["weight"]) / (height_m ** 2)
+    
+    st.title(f"Willkommen zurück, {user['name']}") 
 
     col1, col2, col3 = st.columns(3)                    #erstellt 3 Spalten nebeneinander wie wir das schon in den Einheiten gemacht haben
 
@@ -105,5 +107,6 @@ def show_profile(): #zeigt das Profil des eingeloggten Nutzers an
     with col3:  
         st.metric("Level", user["level"])  # zeigt das Leistungsniveau an
         st.metric("Max. Herzfrequenz", f"{int(user['max_hr'])} bpm")  # zeigt die maximale Herzfrequenz an
+        st.metric("BMI", f"{round(bmi, 1)} kg/m²")
 
 
