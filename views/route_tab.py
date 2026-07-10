@@ -352,37 +352,42 @@ def render_route_tab():
         _render_elevation_profile(result_segments, marker_idx)
 
     with side_col:
-        with st.container(key="route_pace_metrics"):
-            st.html(
-                """
-                <style>
-                .st-key-route_pace_metrics [data-testid="stMetricValue"] { font-size: 1.3rem; }
-                .st-key-route_pace_metrics [data-testid="stMetricLabel"] { font-size: 0.8rem; }
-                </style>
-                """
+        side_panel = st.container(border=True)
+
+        with side_panel:
+            with st.container(key="route_pace_metrics"):
+                st.html(
+                    """
+                    <style>
+                    .st-key-route_pace_metrics [data-testid="stMetricValue"] { font-size: 1.3rem; }
+                    .st-key-route_pace_metrics [data-testid="stMetricLabel"] { font-size: 0.8rem; }
+                    </style>
+                    """
+                )
+                st.metric("Position", f"{marker_row['mid_m']/1000:.2f} km")
+                st.metric("Steigung", f"{marker_row['grade_pct']:+.1f} %")
+                st.metric("Ziel-Pace", _format_pace(marker_row["pace_sec_per_km"]))
+
+            st.divider()
+
+            # -------------------------------------------------------
+            # Schritt H: FIT-Workout-Export fuer Garmin Connect
+            # -------------------------------------------------------
+            workout_name_input = st.text_input(
+                "Name des Workouts (max. 15 Zeichen)",
+                value=route.name,
+                max_chars=15,
             )
-            st.metric("Position", f"{marker_row['mid_m']/1000:.2f} km")
-            st.metric("Steigung", f"{marker_row['grade_pct']:+.1f} %")
-            st.metric("Ziel-Pace", _format_pace(marker_row["pace_sec_per_km"]))
 
-        st.divider()
-
-        # -----------------------------------------------------------
-        # Schritt H: FIT-Workout-Export fuer Garmin Connect
-        # -----------------------------------------------------------
-        workout_name_input = st.text_input(
-            "Name des Workouts (max. 15 Zeichen)",
-            value=route.name,
-            max_chars=15,
-        )
-
-        fit_bytes = build_fit_workout(result_segments, workout_name=workout_name_input)
-        st.download_button(
-            "FIT-Workout herunterladen",
-            data=fit_bytes,
-            file_name=f"{workout_name_input.replace(' ', '_')}.fit",
-            mime="application/octet-stream",
-        )
+            fit_bytes = build_fit_workout(result_segments, workout_name=workout_name_input)
+            st.download_button(
+                "Herunterladen",
+                icon="⬇️",
+                data=fit_bytes,
+                file_name=f"{workout_name_input.replace(' ', '_')}.fit",
+                mime="application/octet-stream",
+                use_container_width=True,
+            )
  
 def _render_map(segments, marker_idx):
     """Karte mit farbcodierter Pace-Linie + Punkt an der Slider-Position."""
