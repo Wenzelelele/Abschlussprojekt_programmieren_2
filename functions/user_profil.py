@@ -19,9 +19,11 @@ def create_user_file():                     #erstellt eine User CSV falls sie no
             "max_hr"])
         df.to_csv(user_file, index=False)   #speichert die leere Tabelle in der CSV 
 
-def load_users():                           #alle User von der CSV werden geladen 
+def load_users():                           #alle User von der CSV werden geladen
     create_user_file()                      #prüft ob ordner und datei existieren
-    return pd.read_csv(user_file)           #liest alle users
+    #username/password als str einlesen, sonst macht pandas z.B. aus "1234" eine Zahl
+    #und der Vergleich mit der Texteingabe aus st.text_input schlägt immer fehl
+    return pd.read_csv(user_file, dtype={"username": str, "password": str})
 
 def save_users(username,password,name,age,height,weight,level,max_hr):
     users= load_users()                     
