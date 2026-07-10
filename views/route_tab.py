@@ -2,10 +2,10 @@
 route_tab.py
 ------------
 Der Streckenplanung-Tab: oben ein Kopfbereich mit Routeninfo, Meldungen
-und der Farb-Legende ueber die volle Breite. Darunter vier Spalten:
-eine schmale, umrandete Panel-Spalte links fuer alle Eingaben (wirkt wie
+und der Farb-Legende über die volle Breite. Darunter vier Spalten:
+eine schmale, umrandete Panel-Spalte links für alle Eingaben (wirkt wie
 eine zweite Sidebar - Streamlit hat aber keine echte zweite native
-Sidebar), dann Karte, Hoehenprofil und rechts eine schmale Spalte mit
+Sidebar), dann Karte, Höhenprofil und rechts eine schmale Spalte mit
 den Pace-Metriken + FIT-Export - so ist alles ohne Scrollen auf einen
 Blick sichtbar.
 
@@ -97,7 +97,7 @@ def _format_time(total_sec: float) -> str:
 
 
 # ---------------------------------------------------------------------
-# Callbacks fuer die Zone<->Zeit Synchronisierung
+# Callbacks für die Zone<->Zeit Synchronisierung
 # ---------------------------------------------------------------------
 
 def _on_zone_change():
@@ -110,8 +110,8 @@ def _on_time_change():
 def _pace_to_color(pace, p_min, p_max):
     """
     Wandelt eine Pace (sec/km) in eine RGB-Farbe um: rot (schnell) ->
-    gelb (mittel) -> gruen (langsam). Wird sowohl von der Karte als auch
-    vom Hoehenprofil genutzt, damit beide Visualisierungen exakt dieselbe
+    gelb (mittel) -> grün (langsam). Wird sowohl von der Karte als auch
+    vom Höhenprofil genutzt, damit beide Visualisierungen exakt dieselbe
     Farblogik verwenden.
     """
 
@@ -129,8 +129,8 @@ def _pace_to_color(pace, p_min, p_max):
 
 
 def _render_pace_legend():
-    """Zeigt einen Farbverlauf-Balken, der die Pace-Einfaerbung von Karte
-    und Hoehenprofil erklaert (rot = schnell, gruen = langsam)."""
+    """Zeigt einen Farbverlauf-Balken, der die Pace-Einfärbung von Karte
+    und Höhenprofil erklärt (rot = schnell, grün = langsam)."""
     fast_r, fast_g, fast_b = 220, 50, 50
     mid_r, mid_g, mid_b = 255, 184, 28
     slow_r, slow_g, slow_b = 0, 168, 107
@@ -172,11 +172,10 @@ def render_route_tab():
     )
     max_distance_km = st.session_state["max_distance_km"]
 
-    # Kopfbereich (Routeninfo/Meldungen/Farb-Legende) ueber die volle Breite,
-    # darunter vier Spalten: schmales Eingabe-Panel (wirkt wie eine zweite
-    # Sidebar - eine echte zweite native Sidebar gibt es in Streamlit nicht),
-    # Karte, Hoehenprofil und rechts eine schmale Spalte mit Pace-Metriken
-    # + Export-Button - so ist alles ohne Scrollen auf einen Blick sichtbar.
+    # Kopfbereich (Routeninfo/Meldungen/Farb-Legende) über die volle Breite,
+    # darunter vier Spalten: schmales Eingabe-Panel ,
+    # Karte, Höhenprofil und rechts eine schmale Spalte mit Pace-Metriken
+    # + Export-Button 
     header = st.container()
     control_col, map_col, profile_col, side_col = st.columns([1.6, 2, 2, 1])
 
@@ -185,7 +184,7 @@ def render_route_tab():
         control_panel.markdown("**Einstellungen**")
 
     # -------------------------------------------------------------
-    # Schritt A: gespeicherte Route waehlen ODER neue GPX hochladen
+    # Schritt A: gespeicherte Route wählen ODER neue GPX hochladen
     # -------------------------------------------------------------
     with control_panel:
         st.caption("Route")
@@ -232,14 +231,14 @@ def render_route_tab():
     route_distance_km = route.total_distance_m / 1000.0
 
     # Slider direkt nach der Routenauswahl im Panel - braucht nur die Anzahl
-    # der Segmente (unabhaengig von Zone/Zeit), kann also schon hier stehen,
+    # der Segmente (unabhängig von Zone/Zeit), kann also schon hier stehen,
     # statt erst ganz unten im Panel.
     with control_panel:
         st.caption("Position auf der Strecke")
         marker_idx = st.slider("Streckenabschnitt", 0, len(segments) - 1, 0)
 
     # -------------------------------------------------------------
-    # Schritt B: Streckenlaengen-Check (unabhaengig von Zone/Zeit)
+    # Schritt B: Streckenlängen-Check (unabhängig von Zone/Zeit)
     # -------------------------------------------------------------
     distance_check = check_distance_ambition(route_distance_km, max_distance_km)
     if distance_check["is_too_ambitious"]:
@@ -342,7 +341,7 @@ def render_route_tab():
     marker_row = result_segments.iloc[marker_idx]
 
     # -------------------------------------------------------------
-    # Schritt G: Karte, Hoehenprofil und rechte Spalte mit Pace-Metriken
+    # Schritt G: Karte, Höhenprofil und rechte Spalte mit Pace-Metriken
     # + Export, alle synchron zum selben Slider/marker_idx
     # -------------------------------------------------------------
     with map_col:
@@ -371,7 +370,7 @@ def render_route_tab():
             st.divider()
 
             # -------------------------------------------------------
-            # Schritt H: FIT-Workout-Export fuer Garmin Connect
+            # Schritt H: FIT-Workout-Export für Garmin Connect
             # -------------------------------------------------------
             workout_name_input = st.text_input(
                 "Name des Workouts (max. 15 Zeichen)",
@@ -431,14 +430,14 @@ def _render_map(segments, marker_idx):
  
 def _render_elevation_profile(segments, marker_idx):
     """
-    Hoehenprofil (Hoehe ueber Distanz), eingefaerbt nach Pace wie die
+    Höhenprofil (Höhe über Distanz), eingefärbt nach Pace wie die
     Karte, mit einer vertikalen Linie + Punkt an der Slider-Position.
- 
-    WICHTIG zum Verstehen: Das Hoehenprofil bekommt KEINEN eigenen
+
+    WICHTIG zum Verstehen: Das Höhenprofil bekommt KEINEN eigenen
     Slider. Es nutzt denselben marker_idx, der weiter oben aus dem
     EINEN gemeinsamen Slider kommt - dadurch bewegen sich Karten-Punkt
-    und Hoehenprofil-Punkt automatisch synchron, ohne dass wir die
-    beiden manuell verknuepfen muessen.
+    und Höhenprofil-Punkt automatisch synchron, ohne dass wir die
+    beiden manuell verknüpfen müssen.
     """
     
  
@@ -449,9 +448,9 @@ def _render_elevation_profile(segments, marker_idx):
     y_ele = segments["ele"]
  
     fig = go.Figure()
- # Y-Achsen-Range vorab berechnen, damit wir die Flaeche bis zur
-    # unteren Achsengrenze zeichnen koennen (statt bis 0, was bei
-    # typischen Hoehenwerten weit ausserhalb des sichtbaren Bereichs liegt).
+ # Y-Achsen-Range vorab berechnen, damit wir die Fläche bis zur
+    # unteren Achsengrenze zeichnen können (statt bis 0, was bei
+    # typischen Höhenwerten weit außerhalb des sichtbaren Bereichs liegt).
     ele_min = y_ele.min()
     ele_max = y_ele.max()
     ele_span = max(ele_max - ele_min, 1.0)  # mind. 1m, falls komplett flach
@@ -459,11 +458,11 @@ def _render_elevation_profile(segments, marker_idx):
     y_axis_bottom = ele_min - padding
     y_axis_top = ele_max + padding
 
-    # Flaeche unter der Linie (dezent, fuer den "Bergprofil"-Look).
+    # Fläche unter der Linie (dezent, für den "Bergprofil"-Look).
     # Zuerst gezeichnet, damit sie im Hintergrund liegt. Die Baseline
     # liegt am unteren Rand des sichtbaren Achsenbereichs, nicht bei 0 -
-    # sonst wuerde die Flaeche (und damit die automatische Skalierung)
-    # bis runter auf 0m reichen, was die Hoehenlinie nach oben quetscht.
+    # sonst würde die Fläche (und damit die automatische Skalierung)
+    # bis runter auf 0m reichen, was die Höhenlinie nach oben quetscht.
     fig.add_trace(go.Scatter(
         x=x_km, y=[y_axis_bottom] * len(x_km),
         mode="lines", line=dict(width=0),
@@ -475,9 +474,9 @@ def _render_elevation_profile(segments, marker_idx):
         fillcolor="rgba(120,120,120,0.10)",
         showlegend=False, hoverinfo="skip",
     ))
-    # Hoehenlinie in vielen kurzen, farbigen Teilstuecken zeichnen, damit
+    # Höhenlinie in vielen kurzen, farbigen Teilstücken zeichnen, damit
     # jedes Segment seine eigene Pace-Farbe bekommt (Plotly kennt keine
-    # "Farbverlauf pro Punkt" Option fuer eine einzelne Linie, deshalb
+    # "Farbverlauf pro Punkt" Option für eine einzelne Linie, deshalb
     # bauen wir sie aus einzelnen Liniensegmenten zusammen).
     for i in range(len(segments) - 1):
         color = _pace_to_color(segments["pace_sec_per_km"].iloc[i], p_min, p_max)
@@ -491,7 +490,7 @@ def _render_elevation_profile(segments, marker_idx):
             hoverinfo="skip",
         ))
  
-    # Flaeche unter der Linie (dezent, fuer den "Bergprofil"-Look)
+    # Fläche unter der Linie (dezent, für den "Bergprofil"-Look)
     fig.add_trace(go.Scatter(
         x=x_km, y=y_ele, mode="lines",
         line=dict(width=0), fill="tozeroy",

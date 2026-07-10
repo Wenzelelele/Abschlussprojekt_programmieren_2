@@ -7,22 +7,22 @@ Garmin FIT Python SDK (garmin-fit-sdk, uv add garmin-fit-sdk).
 GRUNDIDEE:
 Im Gegensatz zum einfachen GPX-Export (der nur eine "Strecke" mit
 Text-Hinweisen ist) ist eine FIT-Workout-Datei ein STRUKTURIERTES
-Workout: Garmin-Geraete koennen pro Abschnitt aktiv anzeigen/warnen,
-ob man im Ziel-Pace-Bereich laeuft.
+Workout: Garmin-Geräte können pro Abschnitt aktiv anzeigen/warnen,
+ob man im Ziel-Pace-Bereich läuft.
 
 WICHTIGE TECHNISCHE DETAILS:
 
 1. Das FIT-Format kennt keine "Pace" direkt, sondern nur "Speed" (m/s).
    Ein Pace-Ziel wird deshalb als Geschwindigkeits-BEREICH gespeichert
    (custom_target_value_low/high), nicht als exakter Punktwert - so
-   arbeiten Garmin-Workouts grundsaetzlich.
+   arbeiten Garmin-Workouts grundsätzlich.
 
 2. Die Sub-Felder von FIT (z.B. "custom_target_speed_low" mit Skalierung
    1000, oder "duration_distance" mit Skalierung 100) werden vom
-   garmin-fit-sdk NUR BEIM LESEN (Decoder) automatisch aufgeloest, NICHT
+   garmin-fit-sdk NUR BEIM LESEN (Decoder) automatisch aufgelöst, NICHT
    beim Schreiben (Encoder). Der Encoder verwendet beim Schreiben immer
    die Skalierung des GENERISCHEN Feldnamens (z.B. "custom_target_value_low"),
-   die 1 betraegt (keine Skalierung). Deshalb muessen wir die Werte SELBST
+   die 1 beträgt (keine Skalierung). Deshalb müssen wir die Werte SELBST
    vorskalieren (z.B. speed_m_s * 1000) und unter dem generischen
    Feldnamen abspeichern - nicht unter dem spezifischen Sub-Feld-Namen,
    den der Encoder gar nicht kennt.
@@ -30,7 +30,7 @@ WICHTIGE TECHNISCHE DETAILS:
 
 3. Bei Nutzung von Custom-Zielwerten (Bereich statt fixer Zone) MUSS
    das normale "target_value"-Feld auf 0 gesetzt werden - sonst wissen
-   Garmin-Geraete nicht, ob sie den einzelnen Wert oder den Bereich
+   Garmin-Geräte nicht, ob sie den einzelnen Wert oder den Bereich
    verwenden sollen (Hinweis aus dem offiziellen Garmin-Entwicklerforum).
 
 GRUPPIERUNG:
@@ -64,21 +64,21 @@ def group_segments_by_grade_class(segments: pd.DataFrame) -> pd.DataFrame:
     Eingabe: segments mit "start_m", "end_m", "grade_pct", "pace_sec_per_km"
     (Ergebnis von estimate_segments_for_zone oder estimate_zone_for_target_time).
 
-    Rueckgabe: ein DataFrame mit einer Zeile pro Block:
+    Rückgabe: ein DataFrame mit einer Zeile pro Block:
         start_m, end_m, distance_m, grade_class, avg_pace_sec_per_km
     """
     working = segments.copy()
     working["grade_class"] = working["grade_pct"].apply(grade_to_class)
 
-    # Blockgrenzen erkennen: immer wenn sich die Klasse gegenueber dem
-    # vorherigen Segment aendert, beginnt ein neuer Block.
+    # Blockgrenzen erkennen: immer wenn sich die Klasse gegenüber dem
+    # vorherigen Segment ändert, beginnt ein neuer Block.
     class_changed = working["grade_class"] != working["grade_class"].shift(1)
     block_id = class_changed.cumsum()
 
     blocks = []
     for _, block_df in working.groupby(block_id):
-        # Pace-Mittelwert des Blocks gewichtet nach Segmentlaenge, damit
-        # laengere Segmente innerhalb des Blocks staerker zaehlen.
+        # Pace-Mittelwert des Blocks gewichtet nach Segmentlänge, damit
+        # längere Segmente innerhalb des Blocks stärker zählen.
         seg_lengths = block_df["end_m"] - block_df["start_m"]
         total_length = seg_lengths.sum()
         if total_length > 0:
@@ -126,7 +126,7 @@ def build_fit_workout(
 ) -> bytes:
     """
     Baut eine FIT-Workout-Datei aus den Streckensegmenten (mit Pace pro
-    Segment) und gibt die rohen Bytes zurueck (zum Speichern oder als
+    Segment) und gibt die rohen Bytes zurück (zum Speichern oder als
     Streamlit-Download).
 
     Jeder Schritt im Workout entspricht einem Block gleicher Steigungs-
@@ -166,7 +166,7 @@ def build_fit_workout(
         # LANGSAMERE Pace (mehr sec/km) entspricht einer NIEDRIGEREN
         # Geschwindigkeit - die obere Pace-Grenze wird zur UNTEREN
         # Speed-Grenze und umgekehrt.
-        pace_slow_bound = pace + pace_tolerance_sec  # langsamer = hoehere sec/km
+        pace_slow_bound = pace + pace_tolerance_sec  # langsamer = höhere sec/km
         pace_fast_bound = max(pace - pace_tolerance_sec, 60.0)  # Sicherheitsnetz: min 1:00/km
 
         speed_low_ms = pace_sec_per_km_to_speed_ms(pace_slow_bound)

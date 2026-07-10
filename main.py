@@ -21,8 +21,8 @@ apply_custom_theme()
 
 def init_route_test_data():
     """
-    Platzhalter fuer den echten "data"-Baustein: legt Mock-Trainingsdaten
-    in st.session_state an, damit der Route-Tab lauffaehig ist. Sobald die
+    Platzhalter für den echten "data"-Baustein: legt Mock-Trainingsdaten
+    in st.session_state an, damit der Route-Tab lauffähig ist. Sobald die
     echte Datenpipeline steht, wird hier stattdessen deren Ergebnis in
     dieselben session_state-Keys geschrieben (siehe Doku in route_tab.py).
     """

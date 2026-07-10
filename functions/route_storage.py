@@ -2,11 +2,11 @@
 route_storage.py
 -----------------
 Speichert hochgeladene GPX-Routen pro Nutzer in einer TinyDB (JSON-Datei),
-damit sie spaeter ueber eine Auswahlbox wieder geladen werden koennen,
-ohne die Datei erneut hochladen zu muessen.
+damit sie später über eine Auswahlbox wieder geladen werden können,
+ohne die Datei erneut hochladen zu müssen.
 
-Jeder Eintrag enthaelt sowohl die schon berechneten Metadaten (Name,
-Distanz, Aufstieg, Datum) fuer eine schnelle Anzeige in der Auswahlbox,
+Jeder Eintrag enthält sowohl die schon berechneten Metadaten (Name,
+Distanz, Aufstieg, Datum) für eine schnelle Anzeige in der Auswahlbox,
 als auch den rohen GPX-Text, um die Route bei Bedarf neu einzulesen.
 """
 
@@ -19,10 +19,10 @@ from data.gpx_processing import parse_gpx
 
 DB_PATH = "data/routes_db.json"
 
-# Ab dieser Anzahl gespeicherter Routen pro Nutzer wird beim naechsten Speichern
-# die aelteste Route automatisch entfernt - vor allem damit die JSON-Datei nicht
-# unbegrenzt waechst, da wir den vollen GPX-Text pro Route mit ablegen.
-MAX_ROUTES_PER_USER = 10
+# Ab dieser Anzahl gespeicherter Routen pro Nutzer wird beim nächsten Speichern
+# die älteste Route automatisch entfernt - vor allem damit die JSON-Datei nicht
+# unbegrenzt wächst, da wir den vollen GPX-Text pro Route mit ablegen.
+MAX_ROUTES_PER_USER = 5
 
 
 def _get_table():
@@ -32,11 +32,11 @@ def _get_table():
 
 def save_route(username: str, filename: str, gpx_text: str) -> None:
     """
-    Parst eine GPX-Datei einmalig und speichert sie inkl. Metadaten fuer den Nutzer.
+    Parst eine GPX-Datei einmalig und speichert sie inkl. Metadaten für den Nutzer.
 
     Speichert nichts, wenn der Nutzer diese Datei (identischer GPX-Inhalt) schon
-    hat - noetig, weil Streamlit bei jeder Interaktion (Slider, Auswahlbox, ...)
-    das Skript neu ausfuehrt und der Uploader die Datei dabei jedes Mal erneut
+    hat - nötig, weil Streamlit bei jeder Interaktion 
+    das Skript neu ausführt und der Uploader die Datei dabei jedes Mal erneut
     liefert, solange sie nicht entfernt wurde.
     """
     Route = Query()
@@ -62,7 +62,7 @@ def save_route(username: str, filename: str, gpx_text: str) -> None:
 
 
 def _prune_old_routes(username: str) -> None:
-    """Behaelt nur die MAX_ROUTES_PER_USER neuesten Routen eines Nutzers."""
+    """Behält nur die MAX_ROUTES_PER_USER neuesten Routen eines Nutzers."""
     routes = get_routes_for_user(username)  # neueste zuerst
 
     excess_routes = routes[MAX_ROUTES_PER_USER:]
@@ -78,5 +78,5 @@ def get_routes_for_user(username: str) -> list[dict]:
 
 
 def delete_route(doc_id: int) -> None:
-    """Loescht eine einzelne gespeicherte Route anhand ihrer TinyDB doc_id."""
+    """Löscht eine einzelne gespeicherte Route anhand ihrer TinyDB doc_id."""
     _get_table().remove(doc_ids=[doc_id])
