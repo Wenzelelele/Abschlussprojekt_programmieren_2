@@ -50,6 +50,16 @@ from functions.pace_model import (
 from functions.distance_check import check_distance_ambition
 from functions.route_storage import delete_route, get_routes_for_user, save_route
 
+# Mitgelieferte Beispielstrecke, damit der Tab sofort getestet werden kann,
+# ohne dass man eine eigene GPX-Datei zur Hand haben muss.
+SAMPLE_GPX_PATH = "data/sample_route.gpx"
+SAMPLE_ROUTE_LABEL = "Beispielstrecke (Testdaten)"
+
+
+def _load_sample_gpx_text() -> str:
+    with open(SAMPLE_GPX_PATH, encoding="utf-8") as f:
+        return f.read()
+
 
 HR_ZONE_LABELS = {
     "Z1": "Z1 – Locker",
@@ -192,24 +202,25 @@ def render_route_tab():
         username = st.session_state.current_user
         saved_routes = get_routes_for_user(username)
 
-        gpx_source = None
-
-        if saved_routes:
-            route_options = ["Neue Route hochladen"] + [
+        # Beispielstrecke steht immer als erste Option da, damit der Tab
+        # sofort nutzbar ist, ohne dass eine eigene GPX-Datei hochgeladen
+        # werden muss - "Neue Route hochladen" bleibt immer die letzte Option.
+        route_options = (
+            [SAMPLE_ROUTE_LABEL]
+            + [
                 f"{r['route_name']} · {r['distance_km']} km · {r['uploaded_at'][:16]}"
                 for r in saved_routes
             ]
-            chosen_option = st.selectbox("Gespeicherte Route", route_options)
+            + ["Neue Route hochladen"]
+        )
+        chosen_option = st.selectbox("Route", route_options)
 
-            if chosen_option != "Neue Route hochladen":
-                chosen_route = saved_routes[route_options.index(chosen_option) - 1]
-                gpx_source = io.StringIO(chosen_route["gpx_content"])
+        gpx_source = None
 
-                if st.button("Route löschen"):
-                    delete_route(chosen_route.doc_id)
-                    st.rerun()
+        if chosen_option == SAMPLE_ROUTE_LABEL:
+            gpx_source = io.StringIO(_load_sample_gpx_text())
 
-        if gpx_source is None:
+        elif chosen_option == "Neue Route hochladen":
             uploaded_gpx = st.file_uploader("GPX-Datei der Strecke hochladen", type=["gpx"])
 
             if uploaded_gpx is None:
@@ -219,6 +230,14 @@ def render_route_tab():
             gpx_text = uploaded_gpx.getvalue().decode("utf-8")
             save_route(username, uploaded_gpx.name, gpx_text)
             gpx_source = io.StringIO(gpx_text)
+
+        else:
+            chosen_route = saved_routes[route_options.index(chosen_option) - 1]
+            gpx_source = io.StringIO(chosen_route["gpx_content"])
+
+            if st.button("Route löschen"):
+                delete_route(chosen_route.doc_id)
+                st.rerun()
 
     try:
         route = parse_gpx(gpx_source)
