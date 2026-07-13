@@ -30,25 +30,29 @@ def _get_table():
     return db.table("routes")
 
 
-def save_route(username: str, filename: str, gpx_text: str) -> None:
+def save_route(username: str, filename: str, gpx_text: str) -> dict:
     """
     Parst eine GPX-Datei einmalig und speichert sie inkl. Metadaten für den Nutzer.
 
-    Speichert nichts, wenn der Nutzer diese Datei (identischer GPX-Inhalt) schon
-    hat - nötig, weil Streamlit bei jeder Interaktion 
-    das Skript neu ausführt und der Uploader die Datei dabei jedes Mal erneut
-    liefert, solange sie nicht entfernt wurde.
+    Speichert nichts Neues, wenn der Nutzer diese Datei (identischer GPX-Inhalt)
+    schon hat - nötig, weil Streamlit bei jeder Interaktion das Skript neu
+    ausführt und der Uploader die Datei dabei jedes Mal erneut liefert, solange
+    sie nicht entfernt wurde.
+
+    Gibt in jedem Fall das zugehörige Routen-Dokument zurück (neu gespeichert
+    oder schon vorhanden), damit der Aufrufer diese Route direkt als aktive
+    Auswahl setzen kann, statt auf die zuletzt gewählte Option zurückzufallen.
     """
     Route = Query()
-    already_saved = _get_table().contains(
+    existing = _get_table().get(
         (Route.username == username) & (Route.gpx_content == gpx_text)
     )
-    if already_saved:
-        return
+    if existing is not None:
+        return existing
 
     route = parse_gpx(io.StringIO(gpx_text))
 
-    _get_table().insert({
+    doc_id = _get_table().insert({
         "username": username,
         "filename": filename,
         "route_name": route.name,
@@ -59,6 +63,8 @@ def save_route(username: str, filename: str, gpx_text: str) -> None:
     })
 
     _prune_old_routes(username)
+
+    return _get_table().get(doc_id=doc_id)
 
 
 def _prune_old_routes(username: str) -> None:

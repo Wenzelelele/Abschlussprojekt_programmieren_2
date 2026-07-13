@@ -61,6 +61,11 @@ def _load_sample_gpx_text() -> str:
         return f.read()
 
 
+def _route_label(route: dict) -> str:
+    """Einheitliche Beschriftung einer gespeicherten Route fuer die Auswahlbox."""
+    return f"{route['route_name']} · {route['distance_km']} km · {route['uploaded_at'][:16]}"
+
+
 HR_ZONE_LABELS = {
     "Z1": "Z1 – Locker",
     "Z2": "Z2 – Grundlage",
@@ -207,13 +212,10 @@ def render_route_tab():
         # werden muss - "Neue Route hochladen" bleibt immer die letzte Option.
         route_options = (
             [SAMPLE_ROUTE_LABEL]
-            + [
-                f"{r['route_name']} · {r['distance_km']} km · {r['uploaded_at'][:16]}"
-                for r in saved_routes
-            ]
+            + [_route_label(r) for r in saved_routes]
             + ["Neue Route hochladen"]
         )
-        chosen_option = st.selectbox("Route", route_options)
+        chosen_option = st.selectbox("Route", route_options, key="route_choice")
 
         gpx_source = None
 
@@ -228,8 +230,14 @@ def render_route_tab():
                 return
 
             gpx_text = uploaded_gpx.getvalue().decode("utf-8")
-            save_route(username, uploaded_gpx.name, gpx_text)
+            saved_route = save_route(username, uploaded_gpx.name, gpx_text)
             gpx_source = io.StringIO(gpx_text)
+
+            # Neu hochgeladene Route direkt als Auswahl setzen, statt beim
+            # naechsten Rerun (z.B. Zone wechseln) auf die Beispielstrecke
+            # zurueckzufallen - passiert sonst, weil sich route_options durch
+            # die neue Route aendert und die Selectbox sich sonst zuruecksetzt.
+            st.session_state["route_choice"] = _route_label(saved_route)
 
         else:
             chosen_route = saved_routes[route_options.index(chosen_option) - 1]
@@ -262,8 +270,7 @@ def render_route_tab():
     distance_check = check_distance_ambition(route_distance_km, max_distance_km)
     if distance_check["is_too_ambitious"]:
         with header:
-            st.error(distance_check["message"])
-        return
+            st.info(distance_check["message"])
 
     with header:
         st.markdown(
