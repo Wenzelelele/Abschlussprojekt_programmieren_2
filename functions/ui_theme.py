@@ -2,7 +2,7 @@
 ui_theme.py
 -----------
 Optisches Feintuning für das Dashboard: ein Berg-Panorama als Hintergrund
-(als eingebettetes SVG, kein externes Bild nötig) plus längliche,
+(als eingebettetes SVG) plus längliche,
 pillenförmige Sidebar-Navigation. Wird per CSS-Injektion umgesetzt, da
 Streamlit selbst kein Hintergrundbild über config.toml erlaubt.
 """

@@ -197,7 +197,7 @@ def render_route_tab():
     # Schritt A: gespeicherte Route wählen ODER neue GPX hochladen
     # -------------------------------------------------------------
     with control_panel:
-        st.caption("Route")
+    
 
         username = st.session_state.current_user
         saved_routes = get_routes_for_user(username)
@@ -253,8 +253,8 @@ def render_route_tab():
     # der Segmente (unabhängig von Zone/Zeit), kann also schon hier stehen,
     # statt erst ganz unten im Panel.
     with control_panel:
-        st.caption("Position auf der Strecke")
-        marker_idx = st.slider("Streckenabschnitt", 0, len(segments) - 1, 0)
+        #st.caption("Position auf der Strecke")
+        marker_idx = st.slider("Position auf der Strecke", 0, len(segments) - 1, 0)
 
     # -------------------------------------------------------------
     # Schritt B: Streckenlängen-Check (unabhängig von Zone/Zeit)
