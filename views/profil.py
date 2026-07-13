@@ -79,7 +79,7 @@ def logout_button(): #Button zum ausloggen
         st.session_state.logged_in = False      #Benutzer ist nicht mehr eingeloggt
         st.session_state.current_user = None    #aktueller Benutzer wird gelöscht
         st.session_state.page = "login"         #App springt zurück zur Login-Seite
-        st.rerun()  
+        st.rerun() 
 
 def show_profile(): #zeigt das Profil 
     

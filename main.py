@@ -47,6 +47,8 @@ def route_page():
 # (deshalb hier, VOR jedem Zugriff auf st.session_state.logged_in).
 _, col_right = st.columns([6, 1])
 with col_right:
+    st.image("data/berglaeufer_logo_transparent.png", width=80)
+
     with st.popover("Support"):
         st.write("Kundenservice 24/7")
         st.write("E-Mail: bergläufer24@gmail.com")
@@ -62,6 +64,7 @@ if not st.session_state.logged_in:
         register_page()
 
 else:
+    st.sidebar.image("data/berglaeufer_logo_transparent.png", width=180)
     logout_button()
 
     pg = st.navigation(
