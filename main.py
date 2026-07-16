@@ -44,46 +44,50 @@ def training_tab():
     render_training_tab()
 
 
-# Info-Button + Support-Kontakt oben rechts, unabhaengig vom Login-Status
-# (deshalb hier, vor dem Login-Check)
-_, info_col, support_col = st.columns([5.3, 0.7, 1])
-with info_col:
-    st.button(
-        "ℹ️",
-        key="route_tab_info",
-        help=(
-            "Route-Tab: Wähle eine Strecke (Beispiel, gespeichert oder "
-            "eigene GPX-Datei hochladen). Gib eine Ziel-HF-Zone ODER eine "
-            "Zielzeit an - die jeweils andere wird automatisch berechnet. "
-            "Karte und Höhenprofil zeigen die prognostizierte Pace "
-            "farbcodiert (rot = schnell, grün = langsam) entlang der "
-            "Strecke. Unten siehst du die Gesamtzeit-Prognose, rechts "
-            "kannst du das Ergebnis als FIT-Workout für Garmin-Geräte "
-            "herunterladen."
-        ),
-    )
+def _render_top_bar(show_info: bool) -> None:
+    """Support-Kontakt oben rechts, mit Info-Button davor - der Info-Button
+    nur wenn show_info=True (soll nur im Route-Tab sichtbar sein)."""
+    if show_info:
+        _, info_col, support_col = st.columns([5.3, 0.7, 1])
+        with info_col:
+            st.button(
+                "ℹ️",
+                key="route_tab_info",
+                help=(
+                    "Route-Tab: Wähle eine Strecke (Beispiel, gespeichert oder "
+                    "eigene GPX-Datei hochladen). Gib eine Ziel-HF-Zone ODER eine "
+                    "Zielzeit an - die jeweils andere wird automatisch berechnet. "
+                    "Karte und Höhenprofil zeigen die prognostizierte Pace "
+                    "farbcodiert (rot = schnell, grün = langsam) entlang der "
+                    "Strecke. Unten siehst du die Gesamtzeit-Prognose, rechts "
+                    "kannst du das Ergebnis als FIT-Workout für Garmin-Geräte "
+                    "herunterladen."
+                ),
+            )
+    else:
+        _, support_col = st.columns([6, 1])
 
-with support_col:
-    with st.popover("Support"):
-        st.write("Kundenservice 24/7")
-        st.write("E-Mail: bergläufer24@gmail.com")
-        st.write("Telefon: +43 664 12345678")
+    with support_col:
+        with st.popover("Support"):
+            st.write("Kundenservice 24/7")
+            st.write("E-Mail: bergläufer24@gmail.com")
+            st.write("Telefon: +43 664 12345678")
 
-    st.image("data/berglaeufer_logo_transparent.png", width=80)
+        st.image("data/berglaeufer_logo_transparent.png", width=80)
+
 
 create_user_file()
 init_login_state()
 
 if not st.session_state.logged_in:
+    _render_top_bar(show_info=False)
+
     if st.session_state.page == "login":
         login_page()
     elif st.session_state.page == "register":
         register_page()
 
 else:
-    st.sidebar.image("data/berglaeufer_logo_transparent.png", width=180)
-    logout_button()
-
     pg = st.navigation(
         [
             st.Page(show_profile, title="Profil"),
@@ -92,6 +96,11 @@ else:
         ],
         position="sidebar",
     )
+
+    _render_top_bar(show_info=(pg.title == "Route"))
+
+    st.sidebar.image("data/berglaeufer_logo_transparent.png", width=180)
+    logout_button()
 
     pg.run()
 
