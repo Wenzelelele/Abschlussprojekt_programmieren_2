@@ -1,10 +1,9 @@
 """
 ui_theme.py
 -----------
-Optisches Feintuning für das Dashboard: ein Berg-Panorama als Hintergrund
-(als eingebettetes SVG) plus längliche,
-pillenförmige Sidebar-Navigation. Wird per CSS-Injektion umgesetzt, da
-Streamlit selbst kein Hintergrundbild über config.toml erlaubt.
+Berg-Panorama als Hintergrund (eingebettetes SVG) + pillenförmige
+Sidebar-Navigation, per CSS-Injektion (Streamlit erlaubt sowas nicht
+über config.toml).
 """
 
 import base64
@@ -38,7 +37,7 @@ _MOUNTAIN_SVG = """
     points="0,900 0,650 120,560 280,620 420,520 580,600 720,500 880,580
             1020,480 1180,560 1320,470 1480,540 1600,500 1600,900"/>
 
-  <polygon fill="#4f6273"
+  <polygon fill="#71889c"
     points="0,900 0,750 100,650 250,720 380,600 520,700 650,580 800,680
             950,560 1100,660 1250,570 1400,650 1550,600 1600,650 1600,900"/>
 
@@ -72,8 +71,8 @@ def apply_custom_theme() -> None:
         }}
 
         [data-testid="stAppViewContainer"] > .main {{
-            background-color: rgba(247, 244, 238, 0.85);
-            backdrop-filter: blur(6px);
+            background-color: rgba(247, 244, 238, 0.72);
+            backdrop-filter: blur(14px);
             border-radius: 18px;
             padding: 1.5rem 2rem;
             margin: 1rem;
@@ -88,8 +87,7 @@ def apply_custom_theme() -> None:
             color: #f5f1e8;
         }}
 
-        /* Eingabefelder haben einen hellen eigenen Hintergrund - dort muss
-           der Text dunkel bleiben, sonst ist er auf hell/hell unsichtbar. */
+        /* Eingabefelder haben hellen Hintergrund - Text muss dunkel bleiben */
         [data-testid="stSidebar"] input,
         [data-testid="stSidebar"] textarea,
         [data-testid="stSidebar"] [data-baseweb="select"] * {{

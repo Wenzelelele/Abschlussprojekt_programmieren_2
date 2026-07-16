@@ -2,12 +2,10 @@
 route_storage.py
 -----------------
 Speichert hochgeladene GPX-Routen pro Nutzer in einer TinyDB (JSON-Datei),
-damit sie später über eine Auswahlbox wieder geladen werden können,
-ohne die Datei erneut hochladen zu müssen.
-
-Jeder Eintrag enthält sowohl die schon berechneten Metadaten (Name,
-Distanz, Aufstieg, Datum) für eine schnelle Anzeige in der Auswahlbox,
-als auch den rohen GPX-Text, um die Route bei Bedarf neu einzulesen.
+damit sie über eine Auswahlbox wieder geladen werden können, statt die
+Datei erneut hochladen zu müssen. Jeder Eintrag hat sowohl die fertigen
+Metadaten (Name, Distanz, Aufstieg, Datum) fuer die Auswahlbox als auch
+den rohen GPX-Text zum Neu-Einlesen.
 """
 
 import io
@@ -34,14 +32,10 @@ def save_route(username: str, filename: str, gpx_text: str) -> dict:
     """
     Parst eine GPX-Datei einmalig und speichert sie inkl. Metadaten für den Nutzer.
 
-    Speichert nichts Neues, wenn der Nutzer diese Datei (identischer GPX-Inhalt)
-    schon hat - nötig, weil Streamlit bei jeder Interaktion das Skript neu
-    ausführt und der Uploader die Datei dabei jedes Mal erneut liefert, solange
-    sie nicht entfernt wurde.
-
-    Gibt in jedem Fall das zugehörige Routen-Dokument zurück (neu gespeichert
-    oder schon vorhanden), damit der Aufrufer diese Route direkt als aktive
-    Auswahl setzen kann, statt auf die zuletzt gewählte Option zurückzufallen.
+    Speichert nichts Neues, wenn dieselbe Datei (gleicher GPX-Inhalt) schon
+    existiert - der Uploader liefert sie sonst bei jedem Rerun erneut.
+    Gibt immer das Routen-Dokument zurück (neu oder vorhanden), damit der
+    Aufrufer die Route direkt als aktive Auswahl setzen kann.
     """
     Route = Query()
     existing = _get_table().get(

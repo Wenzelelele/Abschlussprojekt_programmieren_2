@@ -1,33 +1,17 @@
 """
 route_tab.py
 ------------
-Der Streckenplanung-Tab: oben ein Kopfbereich mit Routeninfo, Meldungen
-und der Farb-Legende über die volle Breite. Darunter vier Spalten:
-eine schmale, umrandete Panel-Spalte links für alle Eingaben (wirkt wie
-eine zweite Sidebar - Streamlit hat aber keine echte zweite native
-Sidebar), dann Karte, Höhenprofil und rechts eine schmale Spalte mit
-den Pace-Metriken + FIT-Export - so ist alles ohne Scrollen auf einen
-Blick sichtbar.
+Streckenplanung-Tab: Kopfbereich mit Routeninfo + Farb-Legende, darunter
+vier Spalten (Eingabe-Panel, Karte, Höhenprofil, Pace-Metriken/Export),
+unten die Zone/Zeit-Prognose - alles ohne Scrollen auf einen Blick.
 
-PRINZIP DER ZONE<->ZEIT SYNCHRONISIERUNG:
-Beide Eingabefelder sind gleichzeitig sichtbar. Über st.session_state
-merken wir uns, welches Feld zuletzt vom Nutzer geändert wurde
-("last_changed" = "zone" oder "time"). Beim Neu-Rendern der Seite
-rechnen wir dann NUR in die jeweils nötige Richtung:
-  - zuletzt Zone geändert -> Zone bestimmt die Zeit (Zone -> Zeit)
-  - zuletzt Zeit geändert  -> Zeit bestimmt die Zone (Zeit -> Zone)
-So entsteht kein Konflikt und keine Rechen-Schleife.
+ZONE<->ZEIT SYNC: st.session_state merkt sich, welches Feld zuletzt
+geändert wurde ("last_changed"), und rechnet beim Rerun nur in die
+jeweils andere Richtung - kein Konflikt, keine Rechen-Schleife.
 
-ERWARTETE EINGABE (von eurem "data"-Baustein, in st.session_state):
-    st.session_state["pace_hr_bins"] = {
-        "up":   {"Z1": ..., "Z2": ..., "Z3": ..., "Z4": ..., "Z5": ...},
-        "flat": {"Z1": ..., ...},
-        "down": {"Z1": ..., ...},
-    }
-    st.session_state["ef_up"] = float
-    st.session_state["ef_flat"] = float
-    st.session_state["ef_down"] = float
-    st.session_state["max_distance_km"] = float
+Erwartet in st.session_state (vom Trainingsdaten-Tab):
+    pace_hr_bins = {"up": {"Z1": ..., ...}, "flat": {...}, "down": {...}}
+    ef_up, ef_flat, ef_down, max_distance_km = float
 """
 
 
@@ -75,19 +59,14 @@ HR_ZONE_LABELS = {
 }
 
 
-def _check_prerequisites() -> bool:
-    """Prüft, ob die benötigten Daten aus dem 'data'-Baustein vorliegen."""
-    required_keys = ["pace_hr_bins", "ef_up", "ef_flat", "ef_down", "max_distance_km"]
-    missing = [k for k in required_keys if k not in st.session_state]
-
-    if missing:
+def _render_data_source_notice() -> None:
+    """Hinweis, falls noch mit Mock- statt echten Trainingsdaten gerechnet
+    wird (main.py setzt training_data_source). Blockiert nichts."""
+    if st.session_state.get("training_data_source") == "mock":
         st.info(
-            "**Bitte erst Trainingsdaten hochladen.**\n\n"
-            f"Für diesen Tab fehlen noch folgende Werte: {', '.join(missing)}. "
-            "Diese werden im Trainingsdaten-Tab berechnet."
+            "**Es werden Mock-Testdaten verwendet.** Für eine echte Prognose "
+            "lade zuerst im Trainingsdaten-Tab einen Lauf hoch."
         )
-        return False
-    return True
 
 
 def _format_pace(sec_per_km) -> str:
@@ -175,9 +154,7 @@ def _render_pace_legend():
 
 def render_route_tab():
     st.subheader("Streckenplanung")
-
-    if not _check_prerequisites():
-        return
+    _render_data_source_notice()
 
     pace_hr_bins = st.session_state["pace_hr_bins"]
     ef_factors = compute_ef_factors(
@@ -187,16 +164,15 @@ def render_route_tab():
     )
     max_distance_km = st.session_state["max_distance_km"]
 
-    # Kopfbereich (Routeninfo/Meldungen/Farb-Legende) über die volle Breite,
-    # darunter vier Spalten: schmales Eingabe-Panel ,
-    # Karte, Höhenprofil und rechts eine schmale Spalte mit Pace-Metriken
-    # + Export-Button 
+    # Layout-Slots vorab anlegen (bestimmt Position auf der Seite),
+    # befuellt wird erst weiter unten im Code.
     header = st.container()
     control_col, map_col, profile_col, side_col = st.columns([1.6, 2, 2, 1])
+    footer = st.container()
 
     with control_col:
+        st.markdown("**Einstellungen**")
         control_panel = st.container(border=True)
-        control_panel.markdown("**Einstellungen**")
 
     # -------------------------------------------------------------
     # Schritt A: gespeicherte Route wählen ODER neue GPX hochladen
@@ -207,9 +183,7 @@ def render_route_tab():
         username = st.session_state.current_user
         saved_routes = get_routes_for_user(username)
 
-        # Beispielstrecke steht immer als erste Option da, damit der Tab
-        # sofort nutzbar ist, ohne dass eine eigene GPX-Datei hochgeladen
-        # werden muss - "Neue Route hochladen" bleibt immer die letzte Option.
+        # Beispielstrecke immer als erste Option, "Neue Route hochladen" immer letzte
         route_options = (
             [SAMPLE_ROUTE_LABEL]
             + [_route_label(r) for r in saved_routes]
@@ -233,10 +207,8 @@ def render_route_tab():
             saved_route = save_route(username, uploaded_gpx.name, gpx_text)
             gpx_source = io.StringIO(gpx_text)
 
-            # Neu hochgeladene Route direkt als Auswahl setzen, statt beim
-            # naechsten Rerun (z.B. Zone wechseln) auf die Beispielstrecke
-            # zurueckzufallen - passiert sonst, weil sich route_options durch
-            # die neue Route aendert und die Selectbox sich sonst zuruecksetzt.
+            # sonst faellt die Auswahlbox beim naechsten Rerun auf die
+            # Beispielstrecke zurueck, weil sich route_options aendert
             st.session_state["route_choice"] = _route_label(saved_route)
 
         else:
@@ -257,9 +229,7 @@ def render_route_tab():
     segments = resample_route(route, segment_length_m=100.0)
     route_distance_km = route.total_distance_m / 1000.0
 
-    # Slider direkt nach der Routenauswahl im Panel - braucht nur die Anzahl
-    # der Segmente (unabhängig von Zone/Zeit), kann also schon hier stehen,
-    # statt erst ganz unten im Panel.
+    # Slider braucht nur die Segment-Anzahl, kann also schon hier stehen
     with control_panel:
         #st.caption("Position auf der Strecke")
         marker_idx = st.slider("Position auf der Strecke", 0, len(segments) - 1, 0)
@@ -294,9 +264,8 @@ def render_route_tab():
     result_segments = None
     chosen_zone = None
 
-    # Zuerst auf Basis von "last_changed" die fehlende Seite berechnen,
-    # BEVOR die Widgets gezeichnet werden - so zeigen die Widgets sofort
-    # den aktuellen, synchronisierten Wert.
+    # fehlende Seite berechnen BEVOR die Widgets gezeichnet werden, damit
+    # sie gleich den synchronisierten Wert zeigen
     if st.session_state["last_changed"] == "zone":
         zone = st.session_state["selected_zone"]
         seg_with_pace = estimate_segments_for_zone(segments, zone, pace_hr_bins, ef_factors)
@@ -319,6 +288,9 @@ def render_route_tab():
 
         result_segments = result["segments"]
         chosen_zone = result["chosen_zone"]
+        # Auswahlbox auf die prognostizierte Zone nachziehen, spiegelbildlich
+        # zum "zone"-Fall oben
+        st.session_state["selected_zone"] = chosen_zone
 
     # -------------------------------------------------------------
     # Schritt D: die zwei synchronisierten Auswahlboxen (Panel)
@@ -346,23 +318,16 @@ def render_route_tab():
         )
 
     # -------------------------------------------------------------
-    # Schritt E: Fehleranzeige bei zu ambitionierter Zielzeit + Legende
+    # Schritt E: Legende oben, Prognose/Fehler kommen erst im footer -
+    # die Gueltigkeitspruefung muss aber schon hier passieren
     # -------------------------------------------------------------
     with header:
-        if error_message:
-            st.error(error_message)
-
-        if result_segments is None or result_segments.empty:
-            st.warning("Keine ausreichenden Trainingsdaten für eine Schätzung vorhanden.")
-            return
-
-        total_sec_final = total_time_for_zone(result_segments)
-        st.success(
-            f"**{HR_ZONE_LABELS.get(chosen_zone, chosen_zone)}** → Gesamtzeit ca. "
-            f"**{_format_time(total_sec_final)}**"
-        )
-
         _render_pace_legend()
+
+    if result_segments is None or result_segments.empty:
+        with footer:
+            st.warning("Keine ausreichenden Trainingsdaten für eine Schätzung vorhanden.")
+        return
 
     marker_row = result_segments.iloc[marker_idx]
 
@@ -371,12 +336,16 @@ def render_route_tab():
     # + Export, alle synchron zum selben Slider/marker_idx
     # -------------------------------------------------------------
     with map_col:
+        st.markdown("**Strecke**")
         _render_map(result_segments, marker_idx)
 
     with profile_col:
+        st.markdown("**Höhenprofil**")
         _render_elevation_profile(result_segments, marker_idx)
 
     with side_col:
+        st.markdown("**Position**")
+
         side_panel = st.container(border=True)
 
         with side_panel:
@@ -389,9 +358,9 @@ def render_route_tab():
                     </style>
                     """
                 )
-                st.metric("Position", f"{marker_row['mid_m']/1000:.2f} km")
+                st.metric("Distanz", f"{marker_row['mid_m']/1000:.2f} km")
                 st.metric("Steigung", f"{marker_row['grade_pct']:+.1f} %")
-                st.metric("Ziel-Pace", _format_pace(marker_row["pace_sec_per_km"]))
+                st.metric("Pace an Position", _format_pace(marker_row["pace_sec_per_km"]))
 
             st.divider()
 
@@ -413,7 +382,31 @@ def render_route_tab():
                 mime="application/octet-stream",
                 use_container_width=True,
             )
- 
+
+    # -------------------------------------------------------------
+    # Footer: Zone/Zeit-Prognose + ggf. Ambitioniert-Meldung, unter den
+    # Grafiken (Slot wurde ganz oben vor den Spalten angelegt)
+    # -------------------------------------------------------------
+    with footer:
+        with st.container(key="prognosis_card", border=True):
+            st.html(
+                """
+                <style>
+                .st-key-prognosis_card {
+                    background-color: rgba(255, 244, 214, 0.96);
+                }
+                </style>
+                """
+            )
+            total_sec_final = total_time_for_zone(result_segments)
+            st.markdown(
+                f"### 🏁 {HR_ZONE_LABELS.get(chosen_zone, chosen_zone)} · "
+                f"Gesamtzeit ca. **{_format_time(total_sec_final)}**"
+            )
+
+            if error_message:
+                st.error(error_message)
+
 def _render_map(segments, marker_idx):
     """Karte mit farbcodierter Pace-Linie + Punkt an der Slider-Position."""
     import pydeck as pdk
@@ -455,16 +448,9 @@ def _render_map(segments, marker_idx):
  
  
 def _render_elevation_profile(segments, marker_idx):
-    """
-    Höhenprofil (Höhe über Distanz), eingefärbt nach Pace wie die
-    Karte, mit einer vertikalen Linie + Punkt an der Slider-Position.
-
-    WICHTIG zum Verstehen: Das Höhenprofil bekommt KEINEN eigenen
-    Slider. Es nutzt denselben marker_idx, der weiter oben aus dem
-    EINEN gemeinsamen Slider kommt - dadurch bewegen sich Karten-Punkt
-    und Höhenprofil-Punkt automatisch synchron, ohne dass wir die
-    beiden manuell verknüpfen müssen.
-    """
+    """Höhenprofil, eingefärbt nach Pace wie die Karte, mit vertikaler
+    Linie + Punkt an der Slider-Position (nutzt denselben marker_idx wie
+    die Karte, dadurch bewegen sich beide automatisch synchron)."""
     
  
     p_min = segments["pace_sec_per_km"].min()
@@ -474,9 +460,8 @@ def _render_elevation_profile(segments, marker_idx):
     y_ele = segments["ele"]
  
     fig = go.Figure()
- # Y-Achsen-Range vorab berechnen, damit wir die Fläche bis zur
-    # unteren Achsengrenze zeichnen können (statt bis 0, was bei
-    # typischen Höhenwerten weit außerhalb des sichtbaren Bereichs liegt).
+ # Y-Achsen-Range vorab berechnen, statt bis 0 zu gehen (waere bei
+    # typischen Hoehenwerten weit ausserhalb des sichtbaren Bereichs)
     ele_min = y_ele.min()
     ele_max = y_ele.max()
     ele_span = max(ele_max - ele_min, 1.0)  # mind. 1m, falls komplett flach
@@ -484,11 +469,8 @@ def _render_elevation_profile(segments, marker_idx):
     y_axis_bottom = ele_min - padding
     y_axis_top = ele_max + padding
 
-    # Fläche unter der Linie (dezent, für den "Bergprofil"-Look).
-    # Zuerst gezeichnet, damit sie im Hintergrund liegt. Die Baseline
-    # liegt am unteren Rand des sichtbaren Achsenbereichs, nicht bei 0 -
-    # sonst würde die Fläche (und damit die automatische Skalierung)
-    # bis runter auf 0m reichen, was die Höhenlinie nach oben quetscht.
+    # Flaeche unter der Linie, Baseline am unteren Achsenrand statt bei 0
+    # (sonst quetscht die Auto-Skalierung die Hoehenlinie nach oben)
     fig.add_trace(go.Scatter(
         x=x_km, y=[y_axis_bottom] * len(x_km),
         mode="lines", line=dict(width=0),
@@ -500,10 +482,8 @@ def _render_elevation_profile(segments, marker_idx):
         fillcolor="rgba(120,120,120,0.10)",
         showlegend=False, hoverinfo="skip",
     ))
-    # Höhenlinie in vielen kurzen, farbigen Teilstücken zeichnen, damit
-    # jedes Segment seine eigene Pace-Farbe bekommt (Plotly kennt keine
-    # "Farbverlauf pro Punkt" Option für eine einzelne Linie, deshalb
-    # bauen wir sie aus einzelnen Liniensegmenten zusammen).
+    # Hoehenlinie aus vielen kurzen Teilstuecken, da Plotly keinen
+    # Farbverlauf pro Punkt fuer eine einzelne Linie kann
     for i in range(len(segments) - 1):
         color = _pace_to_color(segments["pace_sec_per_km"].iloc[i], p_min, p_max)
         color_str = f"rgb({color[0]},{color[1]},{color[2]})"
@@ -546,4 +526,15 @@ def _render_elevation_profile(segments, marker_idx):
         plot_bgcolor="rgba(0,0,0,0)",
     )
  
-    st.plotly_chart(fig, use_container_width=True)
+    with st.container(key="elevation_profile_chart"):
+        st.html(
+            """
+            <style>
+            .st-key-elevation_profile_chart [data-testid="stPlotlyChart"] {
+                border-radius: 16px;
+                overflow: hidden;
+            }
+            </style>
+            """
+        )
+        st.plotly_chart(fig, use_container_width=True)

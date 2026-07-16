@@ -1,33 +1,15 @@
 """
 pace_model.py
 -------------
-Schritt 1: Effizienz-Korrektur aus den 3 Efficiency-Factor-Werten
-(bergauf / flach / bergab).
+Effizienz-Korrektur aus den 3 Efficiency-Factor-Werten (bergauf/flach/
+bergab) und Pace-Schaetzung pro Streckensegment.
 
-GRUNDIDEE:
-Der Efficiency Factor (EF) ist eine Standard-Lauf-Metrik:
-    EF = Geschwindigkeit (m/min) / durchschnittliche Herzfrequenz (bpm)
-Ein höherer EF bedeutet: schneller bei gleicher Herzfrequenz = effizienter.
-
-Wir bekommen 3 EF-Werte (einen pro Geländeart: bergauf, flach, bergab).
-Diese vergleichen wir UNTEREINANDER (nicht gegen einen externen Sollwert),
-um zu sehen, in welcher Geländeart die Person relativ zu sich selbst
-stärker oder schwächer ist.
-
-Beispiel zum Verstehen:
-    ef_up   = 0.95
-    ef_flat = 1.10
-    ef_down = 1.20
-    Durchschnitt = (0.95 + 1.10 + 1.20) / 3 = 1.0833
-
-    factor_up   = 0.95   / 1.0833 = 0.877   -> deutlich unter 1 -> bergauf eher schwach
-    factor_flat = 1.10   / 1.0833 = 1.015   -> knapp über 1 -> leicht überdurchschnittlich
-    factor_down = 1.20   / 1.0833 = 1.108   -> klar über 1 -> bergab stark
-
-Diese Faktoren multiplizieren wir später auf die Basis-Pace aus den Bins.
-Wichtig: ein Faktor > 1 bedeutet "stark" und muss die Pace SCHNELLER machen
-(also die Sekunden pro Kilometer verkleinern) - deshalb teilen wir die Pace
-durch den Faktor, statt zu multiplizieren (siehe Schritt 2).
+EF = Geschwindigkeit (m/min) / Herzfrequenz (bpm), hoeher = effizienter.
+Wir vergleichen die 3 EF-Werte nur UNTEREINANDER (nicht gegen einen
+externen Sollwert), um zu sehen, in welchem Gelaende die Person relativ
+zu sich selbst staerker/schwaecher ist. Der Faktor wird dann auf die
+Basis-Pace aus den Bins multipliziert (genauer: durch den Faktor geteilt,
+siehe apply_ef_factor).
 """
 
 
@@ -38,15 +20,12 @@ def compute_ef_factors(ef_up: float, ef_flat: float, ef_down: float) -> dict:
     geteilt wird.
 
     Rückgabe: {"up": factor, "flat": factor, "down": factor}
-    Ein Faktor von 1.0 bedeutet "durchschnittlich stark in dieser Geländeart
-    im Vergleich zu den eigenen anderen Geländearten".
-    Ein Faktor > 1.0 bedeutet "überdurchschnittlich stark".
-    Ein Faktor < 1.0 bedeutet "unterdurchschnittlich stark".
+    Faktor > 1.0 = überdurchschnittlich stark, < 1.0 = unterdurchschnittlich.
     """
     avg_ef = (ef_up + ef_flat + ef_down) / 3.0
 
     if avg_ef <= 0:
-        # Sicherheitsnetz: ungültige Eingabe (EF sollte nie 0 oder negativ sein)
+        # ungueltige Eingabe, sollte nie 0/negativ sein
         return {"up": 1.0, "flat": 1.0, "down": 1.0}
 
     return {
@@ -60,20 +39,9 @@ def apply_ef_factor(base_pace_sec_per_km: float, ef_factor: float) -> float:
     """
     Wendet einen EF-Stärke-Faktor auf eine Basis-Pace an.
 
-    WICHTIG zum Verstehen: Pace ist in Sekunden pro Kilometer - eine
-    KLEINERE Zahl bedeutet SCHNELLER. Ein Stärke-Faktor > 1 (überdurch-
-    schnittlich stark) soll die Pace schneller machen, also die Sekunden-
-    Zahl verkleinern. Deshalb wird hier DURCH den Faktor geteilt, nicht
-    multipliziert:
-
-        neue_pace = basis_pace / ef_factor
-
-    Beispiel: basis_pace = 300 sec/km (5:00/km), ef_factor = 1.1 (10%
-    stärker als der eigene Durchschnitt)
-        -> neue_pace = 300 / 1.1 = 272.7 sec/km (4:33/km, schneller)
-
-    Beispiel: ef_factor = 0.9 (10% schwächer)
-        -> neue_pace = 300 / 0.9 = 333.3 sec/km (5:33/km, langsamer)
+    Pace ist in sec/km - kleinere Zahl = schneller. Ein Faktor > 1 soll
+    die Pace schneller machen, deshalb wird DURCH den Faktor geteilt statt
+    multipliziert: neue_pace = basis_pace / ef_factor.
     """
     if ef_factor <= 0:
         return base_pace_sec_per_km
@@ -86,7 +54,7 @@ def apply_ef_factor(base_pace_sec_per_km: float, ef_factor: float) -> float:
 
 def grade_to_class(grade_pct: float) -> str:
     """
-    Ordnet eine Steigung (in %) einer der 3 Klassen zu, wie festgelegt:
+    Ordnet eine Steigung (in %) einer der 3 Klassen zu:
         > 3%     -> "up"   (bergauf)
         -3..3%   -> "flat" (flach)
         < -3%    -> "down" (bergab)
@@ -105,13 +73,8 @@ def get_pace_for_segment(
     ef_factors: dict,
 ) -> float | None:
     """
-    Liefert die EF-korrigierte Pace (sec/km) für EIN Streckensegment.
-
-    Ablauf (das ist der Kern des ganzen Moduls):
-    1. Steigung -> Klasse bestimmen ("up"/"flat"/"down")
-    2. In pace_hr_bins[klasse][hr_zone] nachschauen -> Basis-Pace aus
-       den historischen Trainingsdaten
-    3. Mit dem passenden EF-Faktor für diese Klasse korrigieren
+    Liefert die EF-korrigierte Pace (sec/km) für EIN Streckensegment:
+    Steigung -> Klasse -> Basis-Pace aus pace_hr_bins -> EF-Korrektur.
 
     Gibt None zurück, wenn für diese Kombination keine Trainingsdaten
     vorliegen (z.B. nie in Zone Z5 bergab gelaufen).
@@ -141,14 +104,10 @@ def estimate_segments_for_zone(
     """
     Wendet get_pace_for_segment() auf JEDES Segment einer Strecke an.
 
-    segments: DataFrame mit mindestens den Spalten
-        - "grade_pct" (Steigung des Segments in %)
-        - "start_m", "end_m" (Start/Ende des Segments in Metern)
-
     Gibt das DataFrame zurück, ergänzt um:
         - "pace_sec_per_km": die berechnete Pace
-        - "data_available": True/False, ob für dieses Segment echte
-          Trainingsdaten vorlagen (False = Fallback/Mittelwert genutzt)
+        - "data_available": ob fuer dieses Segment echte Trainingsdaten
+          vorlagen (False = Fallback/Mittelwert genutzt)
     """
     import pandas as pd
 
@@ -168,9 +127,8 @@ def estimate_segments_for_zone(
     out["pace_sec_per_km"] = paces
     out["data_available"] = available
 
-    # Falls einzelne Segmente keine Daten hatten: mit dem Durchschnitt
-    # der verfügbaren Segmente auffüllen, damit die Gesamtzeit trotzdem
-    # berechnet werden kann (kein Segment soll "verschwinden").
+    # fehlende Segmente mit Durchschnitt der vorhandenen auffuellen,
+    # damit kein Segment aus der Gesamtzeit-Berechnung rausfaellt
     valid_paces = out["pace_sec_per_km"].dropna()
     if not valid_paces.empty:
         out["pace_sec_per_km"] = out["pace_sec_per_km"].fillna(valid_paces.mean())
@@ -181,10 +139,7 @@ def estimate_segments_for_zone(
 def total_time_for_zone(segments_with_pace: "pd.DataFrame") -> float:
     """
     Summiert die Zeit (in Sekunden) über alle Segmente:
-        zeit_segment = pace_sec_per_km * länge_segment_km
-
-    segments_with_pace muss "pace_sec_per_km", "start_m", "end_m" enthalten
-    (Ergebnis von estimate_segments_for_zone).
+    zeit_segment = pace_sec_per_km * länge_segment_km.
     """
     seg_length_km = (segments_with_pace["end_m"] - segments_with_pace["start_m"]) / 1000.0
     return float((segments_with_pace["pace_sec_per_km"] * seg_length_km).sum())
@@ -205,15 +160,8 @@ def compute_all_zone_times(
     """
     Rechnet für JEDE der 5 HF-Zonen die Gesamtzeit der Strecke aus.
 
-    Rückgabe: {
-        "Z1": {"segments": <DataFrame mit Pace pro Segment>, "total_sec": <float>},
-        "Z2": {...},
-        ...
-    }
-
-    Das ist die Grundlage für die Zeit->Zone Umrechnung: wir müssen
-    wissen, welche Zeit JEDE Zone ergeben würde, um dann die Zielzeit
-    einordnen zu können.
+    Rückgabe: {"Z1": {"segments": DataFrame, "total_sec": float}, "Z2": {...}, ...}
+    Grundlage fuer die Zeit->Zone Umrechnung unten.
     """
     result = {}
     for zone in HR_ZONES:
@@ -236,19 +184,12 @@ def estimate_zone_for_target_time(
     """
     Findet zu einer gewünschten Zielzeit die passende HF-Zone.
 
-    ABLAUF:
-    1. compute_all_zone_times() liefert die Gesamtzeit für alle 5 Zonen.
-       Da Z1 (locker) die langsamste und Z5 (hart) die schnellste Zeit
-       ergibt, sind die 5 Zeiten der Größe nach sortiert.
-    2. Liegt die Zielzeit SCHNELLER als die Z5-Zeit -> zu ambitioniert
-       (schneller als die Person je in den Trainingsdaten belegt hat).
-    3. Liegt die Zielzeit LANGSAMER als die Z1-Zeit -> ebenfalls eine
-       Warnung (aber weniger kritisch, da Unterforderung nicht riskant ist).
-    4. Sonst: die Zone mit der nächstgelegenen Gesamtzeit wählen und die
-       Pace pro Segment so skalieren, dass die Summe exakt der Zielzeit
-       entspricht (profilgewichtet: steile Abschnitte tragen mehr von der
-       Korrektur als flache, weil dort in der Realität auch mehr
-       Pace-Spielraum besteht).
+    Z1 ist die langsamste, Z5 die schnellste Zone. Liegt die Zielzeit
+    schneller als Z5, ist sie zu ambitioniert (Warnung). Liegt sie
+    langsamer als Z1, wird sie einfach bei Z1 gedeckelt (keine Warnung,
+    Unterforderung ist nicht riskant). Sonst wird die naechstgelegene
+    Zone gewaehlt und die Pace pro Segment profilgewichtet auf die
+    Zielzeit skaliert (steile Abschnitte tragen mehr von der Korrektur).
 
     Rückgabe: {
         "is_too_ambitious": bool,
@@ -256,15 +197,11 @@ def estimate_zone_for_target_time(
         "chosen_zone": str,           # gewählte ODER nächstgelegene erreichbare Zone
         "segments": DataFrame,        # Pace pro Segment für chosen_zone
     }
-    WICHTIG: auch wenn is_too_ambitious=True ist, sind chosen_zone und
-    segments NICHT None - sie enthalten dann die nächstgelegene
-    tatsächlich erreichbare Zone (Z5 bei zu schnellem, Z1 bei zu
-    langsamem Ziel), damit die App (Karte, Slider, Export) trotz der
-    Warnung weiter nutzbar bleibt, statt komplett zu stoppen.
+    chosen_zone/segments sind auch bei is_too_ambitious=True nie None,
+    damit die App (Karte, Slider, Export) trotzdem nutzbar bleibt.
     """
     all_zones = compute_all_zone_times(segments, pace_hr_bins, ef_factors)
 
-    # Z1 = langsamste Zeit, Z5 = schnellste Zeit (siehe Doku oben)
     fastest_time = all_zones["Z5"]["total_sec"]
     slowest_time = all_zones["Z1"]["total_sec"]
 
@@ -282,25 +219,17 @@ def estimate_zone_for_target_time(
                 f"Die Karte unten zeigt deshalb die Pace für deine schnellste "
                 f"bisherige Trainingszone (Z5) als Annäherung."
             ),
-            # Fallback: die schnellste tatsächlich belegte Zone anzeigen,
-            # statt gar nichts anzuzeigen - die App bleibt so nutzbar.
             "chosen_zone": "Z5",
             "segments": all_zones["Z5"]["segments"],
         }
 
     # Fall 2: sehr langsames Ziel (langsamer als die eigene lockerste Zone Z1)
+    # - keine Warnung, da Unterforderung nicht riskant ist. Die Prognose
+    # wird einfach still bei Z1 gedeckelt.
     if target_time_sec > slowest_time:
         return {
-            "is_too_ambitious": True,
-            "ambition_message": (
-                f"Diese Zielzeit ist langsamer als deine bisherige lockerste "
-                f"Trainingszone (Z1, ca. {slowest_time/60:.1f} Minuten für diese "
-                f"Strecke). Die Schätzung liegt außerhalb deiner bisherigen "
-                f"Trainingsdaten. Die Karte unten zeigt deshalb die Pace für "
-                f"deine lockerste bisherige Trainingszone (Z1) als Annäherung."
-            ),
-            # Fallback: die langsamste tatsächlich belegte Zone anzeigen,
-            # statt gar nichts anzuzeigen - die App bleibt so nutzbar.
+            "is_too_ambitious": False,
+            "ambition_message": "",
             "chosen_zone": "Z1",
             "segments": all_zones["Z1"]["segments"],
         }
@@ -333,13 +262,9 @@ def _scale_pace_to_target_time(
 ) -> "pd.DataFrame":
     """
     Skaliert die Pace pro Segment so, dass die Gesamtzeit exakt der
-    Zielzeit entspricht - aber NICHT gleichmäßig auf alle Meter verteilt,
-    sondern gewichtet nach Steigung: steile Abschnitte (größer |grade|)
-    tragen mehr von der Korrektur als Flachstücke.
-
-    Das ist dieselbe Idee wie vorher: auf einem steilen Anstieg gibt es in
-    der Realität mehr Spielraum, die Pace zu variieren, als auf einem
-    flachen Stück.
+    Zielzeit entspricht - gewichtet nach Steigung, damit steile
+    Abschnitte mehr von der Korrektur tragen als flache (dort ist in
+    der Realitaet auch mehr Pace-Spielraum).
     """
     out = segments_with_pace.copy()
     seg_length_km = (out["end_m"] - out["start_m"]) / 1000.0

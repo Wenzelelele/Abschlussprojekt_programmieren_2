@@ -19,12 +19,8 @@ apply_custom_theme()
 
 
 def init_route_test_data():
-    """
-    Platzhalter für den echten "data"-Baustein: legt Mock-Trainingsdaten
-    in st.session_state an, damit der Route-Tab lauffähig ist. Sobald die
-    echte Datenpipeline steht, wird hier stattdessen deren Ergebnis in
-    dieselben session_state-Keys geschrieben (siehe Doku in route_tab.py).
-    """
+    """Platzhalter-Trainingsdaten, falls noch keine echten hochgeladen wurden -
+    damit der Route-Tab auch ohne Trainingsdaten-Tab lauffähig ist."""
     if "pace_hr_bins" not in st.session_state:
         st.session_state["pace_hr_bins"] = {
             "up": {"Z1": 380, "Z2": 350, "Z3": 330, "Z4": 310, "Z5": 290},
@@ -35,6 +31,8 @@ def init_route_test_data():
         st.session_state["ef_flat"] = 1.10
         st.session_state["ef_down"] = 1.20
         st.session_state["max_distance_km"] = 10.0
+        # markiert fuer den Route-Tab: Mock statt echter Daten
+        st.session_state["training_data_source"] = "mock"
 
 
 def route_page():
@@ -46,16 +44,32 @@ def training_tab():
     render_training_tab()
 
 
-# Support-Kontakt oben rechts, unabhaengig vom Login-Status sichtbar
-# deshalb hier, VOR jedem Zugriff auf st.session_state.logged_in
-_, col_right = st.columns([6, 1])
-with col_right:
-    st.image("data/berglaeufer_logo_transparent.png", width=80)
+# Info-Button + Support-Kontakt oben rechts, unabhaengig vom Login-Status
+# (deshalb hier, vor dem Login-Check)
+_, info_col, support_col = st.columns([5.3, 0.7, 1])
+with info_col:
+    st.button(
+        "ℹ️",
+        key="route_tab_info",
+        help=(
+            "Route-Tab: Wähle eine Strecke (Beispiel, gespeichert oder "
+            "eigene GPX-Datei hochladen). Gib eine Ziel-HF-Zone ODER eine "
+            "Zielzeit an - die jeweils andere wird automatisch berechnet. "
+            "Karte und Höhenprofil zeigen die prognostizierte Pace "
+            "farbcodiert (rot = schnell, grün = langsam) entlang der "
+            "Strecke. Unten siehst du die Gesamtzeit-Prognose, rechts "
+            "kannst du das Ergebnis als FIT-Workout für Garmin-Geräte "
+            "herunterladen."
+        ),
+    )
 
+with support_col:
     with st.popover("Support"):
         st.write("Kundenservice 24/7")
         st.write("E-Mail: bergläufer24@gmail.com")
         st.write("Telefon: +43 664 12345678")
+
+    st.image("data/berglaeufer_logo_transparent.png", width=80)
 
 create_user_file()
 init_login_state()
