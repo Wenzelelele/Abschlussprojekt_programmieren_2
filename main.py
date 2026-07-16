@@ -10,6 +10,7 @@ from views.profil import (
     show_profile,
 )
 from views.route_tab import render_route_tab
+from views.training_tab import render_training_tab
 
 st.set_page_config(
     page_title="Berglaeufer Dashboard",
@@ -43,6 +44,10 @@ def route_page():
     render_route_tab()
 
 
+def training_tab():
+    render_training_tab()
+
+
 # Support-Kontakt oben rechts, unabhaengig vom Login-Status sichtbar
 # (deshalb hier, VOR jedem Zugriff auf st.session_state.logged_in).
 _, col_right = st.columns([6, 1])
@@ -70,6 +75,7 @@ else:
     pg = st.navigation(
         [
             st.Page(show_profile, title="Profil"),
+            st.Page(training_tab, title="Trainingsdaten"),
             st.Page(route_page, title="Route"),
         ],
         position="sidebar",
