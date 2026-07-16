@@ -7,12 +7,14 @@ from views.profil import (
     login_page,
     logout_button,
     register_page,
-    show_profile,)
-
+    show_profile,
+)
 from views.route_tab import render_route_tab
 from views.training_tab import render_training_tab
 
-st.set_page_config(page_title="Berglaeufer Dashboard",page_icon=":mountain:",layout="wide")
+st.set_page_config(
+    page_title="Berglaeufer Dashboard", page_icon=":mountain:", layout="wide"
+)
 apply_custom_theme()
 
 
@@ -76,8 +78,8 @@ else:
         ],
         position="sidebar",
     )
-    pg = st.navigation([ st.Page(show_profile, title="Profil"),st.Page(route_page, title="Route"),],position="sidebar",)
+
     pg.run()
 
-#if __name__ == "__main__":
-    #main()
+# if __name__ == "__main__":
+# main()
