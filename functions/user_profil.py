@@ -58,3 +58,23 @@ def get_user_data(username):
     if len(user)>0:                              #prüft ob nutzer gefunden wurde
         return user.iloc[0]                      #gibt passende Nutzerzeile zurück
     return None                                  #falls kein Nutzer gefunden wurde, None wird zurückgegeben
+
+def update_user_data(username, name, age, height, weight, level, max_hr): #falls im Profil Daten ändern will
+    # Alle Benutzer aus der CSV laden
+    users = load_users()
+    user_index = users["username"] == username
+
+    # Prüfen, ob der Benutzer existiert
+    if not user_index.any():
+        return False
+
+    # Neue Werte in der Tabelle eintragen
+    users.loc[user_index, "name"] = name
+    users.loc[user_index, "age"] = age
+    users.loc[user_index, "height"] = height
+    users.loc[user_index, "weight"] = weight
+    users.loc[user_index, "level"] = level
+    users.loc[user_index, "max_hr"] = max_hr
+
+    users.to_csv(user_file, index=False) #aktuell eingegebene Werte werden gespeichert 
+    return True
