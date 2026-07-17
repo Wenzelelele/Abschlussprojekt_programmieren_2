@@ -117,11 +117,15 @@ def register_page(): #Profil erstellen, falls nicht vorhanden
         st.rerun()
 
 def logout_button(): #Button zum ausloggen
-    if st.sidebar.button("Logout"):            
+    if st.sidebar.button("Logout"):
+        #kompletter Reset noetig, sonst bleiben Trainings-/Routendaten (pace_hr_bins,
+        #ef_up/flat/down, training_df, route_choice, ...) vom alten Account im
+        #session_state haengen und tauchen beim naechsten Login (auch neuer Account) wieder auf
+        st.session_state.clear()
         st.session_state.logged_in = False      #Benutzer ist nicht mehr eingeloggt
         st.session_state.current_user = None    #aktueller Benutzer wird gelöscht
         st.session_state.page = "login"         #App springt zurück zur Login-Seite
-        st.rerun() 
+        st.rerun()
 
 def show_profile(): #zeigt das Profil, Code relativ lang, könnte man aufteilen
     
