@@ -10,7 +10,17 @@ externen Sollwert), um zu sehen, in welchem Gelaende die Person relativ
 zu sich selbst staerker/schwaecher ist. Der Faktor wird dann auf die
 Basis-Pace aus den Bins multipliziert (genauer: durch den Faktor geteilt,
 siehe apply_ef_factor).
+
+WICHTIG: pace_hr_bins speichert GAP-Pace (steigungsbereinigt), nicht die
+reale Pace - das macht Vergleiche ueber Steigungen hinweg erst fair.
+get_pace_for_segment() rechnet das Ergebnis deshalb am Ende mit der
+TATSAECHLICHEN Steigung des Segments wieder in reale Pace zurueck
+(calc_real_pace_from_gap), sonst wuerde ueberall im Routen-Tab GAP statt
+realer Pace angezeigt werden - was z.B. bergab langsamer aussehen laesst
+als bergauf, obwohl es real fast immer umgekehrt ist.
 """
+
+from functions.efficiency import calc_real_pace_from_gap
 
 
 def compute_ef_factors(ef_up: float, ef_flat: float, ef_down: float) -> dict:
@@ -52,6 +62,7 @@ def apply_ef_factor(base_pace_sec_per_km: float, ef_factor: float) -> float:
 # Schritt 3: Steigungsklasse bestimmen + Pace-Lookup mit EF-Korrektur
 # ---------------------------------------------------------------------
 
+
 def grade_to_class(grade_pct: float) -> str:
     """
     Ordnet eine Steigung (in %) einer der 3 Klassen zu:
@@ -73,8 +84,10 @@ def get_pace_for_segment(
     ef_factors: dict,
 ) -> float | None:
     """
-    Liefert die EF-korrigierte Pace (sec/km) für EIN Streckensegment:
-    Steigung -> Klasse -> Basis-Pace aus pace_hr_bins -> EF-Korrektur.
+    Liefert die erwartete REALE Pace (sec/km) für EIN Streckensegment:
+    Steigung -> Klasse -> Basis-GAP-Pace aus pace_hr_bins -> EF-Korrektur
+    -> Rückrechnung von GAP auf reale Pace mit der EXAKTEN Steigung
+    (nicht nur der groben Klasse - siehe calc_real_pace_from_gap).
 
     Gibt None zurück, wenn für diese Kombination keine Trainingsdaten
     vorliegen (z.B. nie in Zone Z5 bergab gelaufen).
@@ -88,12 +101,14 @@ def get_pace_for_segment(
         return None
 
     factor = ef_factors.get(grade_class, 1.0)
-    return apply_ef_factor(base_pace, factor)
+    gap_corrected = apply_ef_factor(base_pace, factor)
+    return calc_real_pace_from_gap(gap_corrected, grade_pct)
 
 
 # ---------------------------------------------------------------------
 # Schritt 4: Gesamtzeit für die ganze Strecke bei einer HF-Zone
 # ---------------------------------------------------------------------
+
 
 def estimate_segments_for_zone(
     segments: "pd.DataFrame",
@@ -141,7 +156,9 @@ def total_time_for_zone(segments_with_pace: "pd.DataFrame") -> float:
     Summiert die Zeit (in Sekunden) über alle Segmente:
     zeit_segment = pace_sec_per_km * länge_segment_km.
     """
-    seg_length_km = (segments_with_pace["end_m"] - segments_with_pace["start_m"]) / 1000.0
+    seg_length_km = (
+        segments_with_pace["end_m"] - segments_with_pace["start_m"]
+    ) / 1000.0
     return float((segments_with_pace["pace_sec_per_km"] * seg_length_km).sum())
 
 
@@ -165,7 +182,9 @@ def compute_all_zone_times(
     """
     result = {}
     for zone in HR_ZONES:
-        seg_with_pace = estimate_segments_for_zone(segments, zone, pace_hr_bins, ef_factors)
+        seg_with_pace = estimate_segments_for_zone(
+            segments, zone, pace_hr_bins, ef_factors
+        )
         total_sec = total_time_for_zone(seg_with_pace)
         result[zone] = {"segments": seg_with_pace, "total_sec": total_sec}
     return result
@@ -174,6 +193,7 @@ def compute_all_zone_times(
 # ---------------------------------------------------------------------
 # Schritt 7: Zeit -> Zone (die "andere Richtung")
 # ---------------------------------------------------------------------
+
 
 def estimate_zone_for_target_time(
     segments: "pd.DataFrame",
