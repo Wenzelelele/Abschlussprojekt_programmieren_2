@@ -1,9 +1,7 @@
 """
 gpx_processing.py
 ------------------
-Parsing von GPX-Dateien und Berechnung von Distanz/Höhe/Steigung
-pro Streckensegment, unabhängig von der Trainingsdaten-Pipeline
-des anderen Tabs.
+GPX einlesen und Distanz/Höhe/Steigung pro Segment berechnen.
 """
 
 
@@ -45,9 +43,8 @@ def parse_gpx(file_obj, smoothing_window: int = 5) -> RouteData:
     """
     Liest eine GPX-Datei und gibt ein RouteData-Objekt zurück.
 
-    file_obj: geöffnetes Datei-/Bytes-Objekt (z.B. von st.file_uploader)
-    smoothing_window: Glättungsfenster für die Höhe, um GPS-Rauschen
-                       in der Steigungsberechnung zu reduzieren.
+    smoothing_window glättet die Höhe, um GPS-Rauschen bei der
+    Steigungsberechnung zu reduzieren.
     """
     gpx = gpxpy.parse(file_obj)
 
@@ -64,7 +61,7 @@ def parse_gpx(file_obj, smoothing_window: int = 5) -> RouteData:
                 )
 
     if not rows:
-        # Fallback: manche GPX-Dateien speichern Wegpunkte statt Tracks
+        # manche GPX-Dateien haben Wegpunkte statt Tracks
         for wpt in gpx.waypoints:
             rows.append({"lat": wpt.latitude, "lon": wpt.longitude, "ele": wpt.elevation})
 
@@ -73,7 +70,7 @@ def parse_gpx(file_obj, smoothing_window: int = 5) -> RouteData:
 
     df = pd.DataFrame(rows)
 
-    # Höhe glätten (rollender Mittelwert), um Steigungs-Rauschen zu dämpfen
+    # Höhe glätten, um Steigungs-Rauschen zu dämpfen
     df["ele"] = df["ele"].interpolate(limit_direction="both")
     df["ele_smooth"] = (
         df["ele"].rolling(window=smoothing_window, center=True, min_periods=1).mean()
@@ -120,12 +117,10 @@ def parse_gpx(file_obj, smoothing_window: int = 5) -> RouteData:
 
 def resample_route(route: RouteData, segment_length_m: float = 100.0) -> pd.DataFrame:
     """
-    Aggregiert die Rohpunkte zu gleichlangen Abschnitten (z.B. alle 100 m),
-    damit der Pace-Slider gleichmäßige, sinnvolle Schritte hat statt
-    einem Schritt pro (unregelmäßigem) GPS-Punkt.
+    Aggregiert die Rohpunkte zu gleichlangen Abschnitten (z.B. alle 100 m)
+    fuer gleichmaessige Slider-Schritte statt einem Schritt pro GPS-Punkt.
 
-    Gibt ein DataFrame zurück mit: start_m, end_m, mid_m, lat, lon (Mittelpunkt),
-    grade_pct (mittlere Steigung des Abschnitts), ele.
+    Spalten: start_m, end_m, mid_m, lat, lon, grade_pct, ele.
     """
     df = route.points
     total = route.total_distance_m
@@ -139,8 +134,7 @@ def resample_route(route: RouteData, segment_length_m: float = 100.0) -> pd.Data
     for b in range(n_segments):
         mask = bin_idx == b
         if not mask.any():
-            # Falls ein Bin leer ist (sehr kurze Strecke / große Segmentlänge),
-            # interpolieren wir den Punkt direkt.
+            # leerer Bin (kurze Strecke) -> Punkt interpolieren
             mid = (bin_edges[b] + bin_edges[b + 1]) / 2
             lat = np.interp(mid, df["dist_m"], df["lat"])
             lon = np.interp(mid, df["dist_m"], df["lon"])
@@ -151,7 +145,7 @@ def resample_route(route: RouteData, segment_length_m: float = 100.0) -> pd.Data
             lat = sub["lat"].mean()
             lon = sub["lon"].mean()
             ele = sub["ele_smooth"].mean()
-            # Steigung des Abschnitts: Höhendifferenz Start->Ende / Distanz
+            # Steigung: Höhendifferenz Start->Ende / Distanz
             ele_start = sub["ele_smooth"].iloc[0]
             ele_end = sub["ele_smooth"].iloc[-1]
             dist_span = max(sub["seg_dist_m"].sum(), 1e-6)

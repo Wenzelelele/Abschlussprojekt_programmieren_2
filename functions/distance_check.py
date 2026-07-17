@@ -1,19 +1,11 @@
 """
 distance_check.py
 ------------------
-Schritt 6: Prüft, ob eine hochgeladene Strecke im Vergleich zur
-bisherigen Lauf-Historie unrealistisch lang ist.
-
-GRUNDIDEE:
-Wenn jemand bisher maximal 10 km gelaufen ist und eine 100 km-Strecke
-hochlädt, macht eine Pace-Vorhersage wenig Sinn - wir haben schlicht
-keine Trainingsdaten, die zeigen, wie sich der Körper bei dieser
-Belastung verhält (Ermüdung nach 3-4 Stunden ist etwas komplett
-anderes als nach 50 Minuten).
+Prüft, ob eine hochgeladene Strecke im Vergleich zur bisherigen
+Lauf-Historie unrealistisch lang ist (macht sonst keine sinnvolle
+Pace-Vorhersage möglich).
 
 Schwellwert: 2.5-faches der bisherigen Maximaldistanz.
-Beispiel: bisher max. 10 km gelaufen -> ab 25 km Streckenlänge kommt
-die Warnung.
 """
 
 
@@ -33,9 +25,7 @@ def check_distance_ambition(route_distance_km: float, max_distance_km: float) ->
     }
     """
     if max_distance_km <= 0:
-        # Keine Trainingsdaten vorhanden - können wir nicht sinnvoll
-        # bewerten, geben aber sicherheitshalber eine Warnung statt eines
-        # falschen "alles ok".
+        # keine Trainingsdaten -> koennen wir nicht bewerten
         return {
             "is_too_ambitious": False,
             "threshold_km": None,
