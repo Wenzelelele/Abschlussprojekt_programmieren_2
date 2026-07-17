@@ -67,15 +67,6 @@ if not st.session_state.logged_in:
 else:
     st.sidebar.image("data/berglaeufer_logo_transparent.png", width=180)
     logout_button()
-
-    pg = st.navigation(
-        [
-            st.Page(show_profile, title="Profil"),
-            st.Page(training_tab, title="Trainingsdaten"),
-            st.Page(route_page, title="Route"),
-        ],
-        position="sidebar",
-    )
     pg = st.navigation([ st.Page(show_profile, title="Profil"),st.Page(route_page, title="Route"),],position="sidebar",)
     pg.run()
 
