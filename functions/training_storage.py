@@ -38,6 +38,7 @@ def save_training_summary(
     pace_hr_bins: dict,
     max_distance_km: float,
     max_elevation_m: float,
+    n_runs: int = 0,
 ) -> None:
     """
     Speichert (oder ueberschreibt) die Trainings-Aggregate einer Person.
@@ -52,6 +53,7 @@ def save_training_summary(
             "pace_hr_bins": _to_plain_floats(pace_hr_bins),
             "max_distance_km": float(max_distance_km),
             "max_elevation_m": float(max_elevation_m),
+            "n_runs": int(n_runs),
             "updated_at": datetime.now().isoformat(timespec="seconds"),
         },
         User.person_id == person_id,
