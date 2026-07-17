@@ -7,14 +7,16 @@ Eine Streamlit-App für Berglauf-Training und Streckenplanung. Trainingsläufe (
 
 ## Tabs
 
-- **Profil** – Zugangsdaten, persönliche Daten, BMI-Auswertung, Bearbeiten des eigenen Profils
+- # Profil – Zugangsdaten, persönliche Daten, BMI-Auswertung, Bearbeiten des eigenen Profils
+
 ![Profil Tab](data/pictures/Profil.png)
 
-## Tabs
-- **Trainingsdaten** – GPX/FIT-Läufe hochladen, Effizienz je Geländeart und HF-Zonen-Methode auswerten
-## Tabs
+- # Trainingsdaten – GPX/FIT-Läufe hochladen, Effizienz je Geländeart und HF-Zonen-Methode auswerten
+
 ![Training Tab](data/pictures/Trainingsdaten.png)
-- **Route** – Strecke planen: GPX hochladen oder Beispielstrecke nutzen, Ziel-HF-Zone/Zielzeit festlegen, Karte + Höhenprofil ansehen, als FIT-Workout exportieren
+
+- # Route – Strecke planen: GPX hochladen oder Beispielstrecke nutzen, Ziel-HF-Zone/Zielzeit festlegen, Karte + Höhenprofil ansehen, als FIT-Workout exportieren
+
 ![Route](data/pictures/Routenplanung.png)
 
 ## Installation und Start
