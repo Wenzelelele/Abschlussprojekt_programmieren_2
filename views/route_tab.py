@@ -184,6 +184,11 @@ def render_route_tab():
         username = st.session_state.current_user
         saved_routes = get_routes_for_user(username)
 
+        # muss VOR dem Zeichnen der Selectbox passieren - danach laesst
+        # Streamlit keine Aenderung von session_state["route_choice"] mehr zu
+        if "_pending_route_choice" in st.session_state:
+            st.session_state["route_choice"] = st.session_state.pop("_pending_route_choice")
+
         # Beispielstrecke immer als erste Option, "Neue Route hochladen" immer letzte
         route_options = (
             [SAMPLE_ROUTE_LABEL]
@@ -206,11 +211,13 @@ def render_route_tab():
 
             gpx_text = uploaded_gpx.getvalue().decode("utf-8")
             saved_route = save_route(username, uploaded_gpx.name, gpx_text)
-            gpx_source = io.StringIO(gpx_text)
 
-            # sonst faellt die Auswahlbox beim naechsten Rerun auf die
-            # Beispielstrecke zurueck, weil sich route_options aendert
-            st.session_state["route_choice"] = _route_label(saved_route)
+            # Selectbox wurde in diesem Durchlauf schon gezeichnet, kann also
+            # jetzt nicht mehr direkt umgesetzt werden - stattdessen ueber
+            # einen Zwischenspeicher + Rerun, der die Auswahl VOR dem
+            # naechsten Zeichnen der Selectbox anwendet (siehe oben)
+            st.session_state["_pending_route_choice"] = _route_label(saved_route)
+            st.rerun()
 
         else:
             chosen_route = saved_routes[route_options.index(chosen_option) - 1]

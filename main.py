@@ -45,26 +45,34 @@ def training_tab():
     render_training_tab()
 
 
-def _render_top_bar(show_info: bool) -> None:
+ROUTE_TAB_HELP = (
+    "Route-Tab: Wähle eine Strecke (Beispiel, gespeichert oder "
+    "eigene GPX-Datei hochladen). Gib eine Ziel-HF-Zone ODER eine "
+    "Zielzeit an - die jeweils andere wird automatisch berechnet. "
+    "Karte und Höhenprofil zeigen die prognostizierte Pace "
+    "farbcodiert (rot = schnell, grün = langsam) entlang der "
+    "Strecke. Unten siehst du die Gesamtzeit-Prognose, rechts "
+    "kannst du das Ergebnis als FIT-Workout für Garmin-Geräte "
+    "herunterladen."
+)
+
+TRAINING_TAB_HELP = (
+    "Trainingsdaten-Tab: Lade einen aufgezeichneten Lauf hoch (GPX/FIT, "
+    "mit Zeitstempeln UND Herzfrequenz - keine reine Streckendatei). "
+    "Wähle deine HF-Zonen-Methode (max. HF, Alter oder manuell). Die App "
+    "berechnet daraus deine Effizienz je Geländeart (bergauf/flach/bergab) "
+    "und gibt dir eine Trainingsempfehlung. Diese Werte sind die Grundlage "
+    "für die Pace-Vorhersage im Route-Tab."
+)
+
+
+def _render_top_bar(info_help: str | None) -> None:
     """Support-Kontakt oben rechts, mit Info-Button davor - der Info-Button
-    nur wenn show_info=True (soll nur im Route-Tab sichtbar sein)."""
-    if show_info:
+    nur, wenn fuer den aktiven Tab ein Hilfetext hinterlegt ist."""
+    if info_help:
         _, info_col, support_col = st.columns([5.3, 0.7, 1])
         with info_col:
-            st.button(
-                "ℹ️",
-                key="route_tab_info",
-                help=(
-                    "Route-Tab: Wähle eine Strecke (Beispiel, gespeichert oder "
-                    "eigene GPX-Datei hochladen). Gib eine Ziel-HF-Zone ODER eine "
-                    "Zielzeit an - die jeweils andere wird automatisch berechnet. "
-                    "Karte und Höhenprofil zeigen die prognostizierte Pace "
-                    "farbcodiert (rot = schnell, grün = langsam) entlang der "
-                    "Strecke. Unten siehst du die Gesamtzeit-Prognose, rechts "
-                    "kannst du das Ergebnis als FIT-Workout für Garmin-Geräte "
-                    "herunterladen."
-                ),
-            )
+            st.button("ℹ️", key="tab_info", help=info_help)
     else:
         _, support_col = st.columns([6, 1])
 
@@ -81,7 +89,7 @@ create_user_file()
 init_login_state()
 
 if not st.session_state.logged_in:
-    _render_top_bar(show_info=False)
+    _render_top_bar(info_help=None)
 
     if st.session_state.page == "login":
         login_page()
@@ -98,7 +106,8 @@ else:
         position="sidebar",
     )
 
-    _render_top_bar(show_info=(pg.title == "Route"))
+    tab_help = {"Route": ROUTE_TAB_HELP, "Trainingsdaten": TRAINING_TAB_HELP}
+    _render_top_bar(info_help=tab_help.get(pg.title))
 
     st.sidebar.image("data/berglaeufer_logo_transparent.png", width=180)
     logout_button()
