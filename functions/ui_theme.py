@@ -29,15 +29,15 @@ _MOUNTAIN_SVG = """
   <circle cx="1230" cy="230" r="140" fill="url(#sun)"/>
   <circle cx="1230" cy="230" r="55" fill="#fff6e2" opacity="0.9"/>
 
-  <polygon fill="#b9c9d6" opacity="0.85"
+  <polygon fill="#dee7ee" opacity="0.85"
     points="0,900 0,550 150,480 300,520 450,430 600,500 750,420 900,480
             1050,400 1200,470 1350,410 1500,460 1600,430 1600,900"/>
 
-  <polygon fill="#8ea2b4" opacity="0.9"
+  <polygon fill="#b7c5d1" opacity="0.9"
     points="0,900 0,650 120,560 280,620 420,520 580,600 720,500 880,580
             1020,480 1180,560 1320,470 1480,540 1600,500 1600,900"/>
 
-  <polygon fill="#71889c"
+  <polygon fill="#aec0cd"
     points="0,900 0,750 100,650 250,720 380,600 520,700 650,580 800,680
             950,560 1100,660 1250,570 1400,650 1550,600 1600,650 1600,900"/>
 
@@ -116,6 +116,15 @@ def apply_custom_theme() -> None:
         [data-testid="stSidebar"] button {{
             border-radius: 999px;
             width: 100%;
+            background-color: transparent !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+            color: #f5f1e8 !important;
+        }}
+
+        [data-testid="stSidebar"] button:hover {{
+            background-color: #ffffff !important;
+            border-color: #ffffff !important;
+            color: #20262b !important;
         }}
         </style>
         """,
