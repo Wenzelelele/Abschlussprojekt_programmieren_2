@@ -83,24 +83,24 @@ def save_users(username,password,name,age,height,weight,level,max_hr,zone_method
     new_user_id = str(uuid.uuid4()) #neue eindeutige ID wird erzeugt
 
     while new_user_id in used_ids: #Überprüfung, sodass keine Doppelung vorkommt
-        new_user_id = str(uuid.uuid4())                     
+        new_user_id = str(uuid.uuid4())
 
-        new_user= pd.DataFrame([{ #erstellt eine neue kleine Tabelle mit genau einem Benutzer
-            "user_id": new_user_id,              
-            "username": username,
-            "password": password,
-            "name": name,
-            "age": age,
-            "height": height,
-            "weight": weight,
-            "level": level,
-            "max_hr": max_hr,
-            "zone_method": zone_method,         #zonen für hannes relevant
-            "hr_bound_1": hr_bound_1,
-            "hr_bound_2": hr_bound_2,
-            "hr_bound_3": hr_bound_3,
-            "hr_bound_4": hr_bound_4}])
-    
+    new_user= pd.DataFrame([{ #erstellt eine neue kleine Tabelle mit genau einem Benutzer
+        "user_id": new_user_id,
+        "username": username,
+        "password": password,
+        "name": name,
+        "age": age,
+        "height": height,
+        "weight": weight,
+        "level": level,
+        "max_hr": max_hr,
+        "zone_method": zone_method,         #zonen für hannes relevant
+        "hr_bound_1": hr_bound_1,
+        "hr_bound_2": hr_bound_2,
+        "hr_bound_3": hr_bound_3,
+        "hr_bound_4": hr_bound_4}])
+
     users= pd.concat([users, new_user], ignore_index=True) #hängt neuen Benutzer an die Tabelle an
     users.to_csv(user_file, index=False)                   #speichert komplette Tabelle wieder in CSV
 

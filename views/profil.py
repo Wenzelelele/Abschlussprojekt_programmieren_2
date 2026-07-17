@@ -1,6 +1,13 @@
+import pandas as pd
 import streamlit as st
 
-from functions.user_profil import (check_login,save_users,username_exists,get_user_data,update_user_data) 
+from functions.user_profil import (check_login,save_users,username_exists,get_user_data,update_user_data,update_zone_settings)
+
+ZONE_METHOD_LABELS = {                      #dieselben Labels wie im Trainingsdaten-Tab
+    "max_hr": "Prozent der maximalen HF",
+    "age": "Altersbasiert (Tanaka-Formel)",
+    "manual": "Manuelle Zonengrenzen",
+}
 
 def init_login_state(): #bereitet login Zustand vor
     
@@ -67,6 +74,21 @@ def register_page(): #Profil erstellen, falls nicht vorhanden
     level= st.selectbox("Leistungsniveau",["Anfänger", "Fortgeschritten", "Profi"])
     max_hr= st.number_input("Maximale Herzfrequenz", min_value=100, max_value=220, step=1)
 
+    st.subheader("HF-Zonen")
+    zone_method = st.selectbox(
+        "HF-Zonen-Methode",
+        options=["max_hr", "age", "manual"],
+        format_func=ZONE_METHOD_LABELS.get,
+    )
+
+    hr_bound_1 = hr_bound_2 = hr_bound_3 = hr_bound_4 = None
+    if zone_method == "manual":                             #nur hier braucht es feste bpm-Grenzen
+        bcol1, bcol2, bcol3, bcol4 = st.columns(4)
+        hr_bound_1 = bcol1.number_input("Z1/Z2 (bpm)", min_value=60, max_value=230, value=round(0.6 * max_hr))
+        hr_bound_2 = bcol2.number_input("Z2/Z3 (bpm)", min_value=60, max_value=230, value=round(0.7 * max_hr))
+        hr_bound_3 = bcol3.number_input("Z3/Z4 (bpm)", min_value=60, max_value=230, value=round(0.8 * max_hr))
+        hr_bound_4 = bcol4.number_input("Z4/Z5 (bpm)", min_value=60, max_value=230, value=round(0.9 * max_hr))
+
     if st.button("Profil speichern"):  # Button zum Speichern
 
         if username == "" or password == "" or name == "":#prüft Pflichtfelder
@@ -74,12 +96,15 @@ def register_page(): #Profil erstellen, falls nicht vorhanden
 
         elif password != password_repeat:#prüft, ob Passwörter gleich sind
             st.error("Die Passwörter stimmen nicht überein.")
-        
+
         elif username_exists(username):#prüft, ob Benutzername schon existiert
             st.error("Dieser Benutzername existiert bereits.")
-        
+
         else:
-            save_users(username, password, name, age, height, weight, level, max_hr)  #Benutzer speichern
+            save_users(
+                username, password, name, age, height, weight, level, max_hr,
+                zone_method, hr_bound_1, hr_bound_2, hr_bound_3, hr_bound_4,
+            )  #Benutzer speichern
             st.success("Profil wurde erfolgreich erstellt!")  #Erfolgsmeldung
             st.session_state.logged_in = True                 #direkt einloggen
             st.session_state.current_user = username          #Benutzer merken
@@ -193,24 +218,50 @@ def show_profile(): #zeigt das Profil, Code relativ lang, könnte man aufteilen
     with st.expander("✏️ Profil bearbeiten"): #einen weiteren Expander um Profil möglicherweise zu bearbeiten und Daten zu aktualisieren
 
         st.caption("Hier kannst du deine persönlichen Daten jederzeit aktualisieren.")
-        with st.form("edit_profile_form"): #Formular verhindert, dass die Seite bei jeder Eingabe neu geladen wird
+        #kein st.form hier, weil die Zonengrenzen-Felder sich live ein-/ausblenden
+        #sollen, je nachdem was bei der Zonen-Methode gewaehlt ist
 
-            col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2)
 
-            with col1:
-                new_name = st.text_input("Name",value=str(user["name"]))
-                new_age = st.number_input("Alter",min_value=10,max_value=100,value=int(user["age"]),step=1)
-                new_height = st.number_input("Größe in cm",min_value=130,max_value=230,value=int(user["height"]),step=1)
+        with col1:
+            new_name = st.text_input("Name",value=str(user["name"]),key="edit_name")
+            new_age = st.number_input("Alter",min_value=10,max_value=100,value=int(user["age"]),step=1,key="edit_age")
+            new_height = st.number_input("Größe in cm",min_value=130,max_value=230,value=int(user["height"]),step=1,key="edit_height")
 
-            with col2:
-                new_weight = st.number_input("Gewicht in kg",min_value=40,max_value=200,value=int(user["weight"]),step=1)
-                levels = ["Anfänger", "Fortgeschritten", "Profi"]
-                # Aktuelle Position des Leistungsniveaus bestimmen
-                current_level_index = levels.index(user["level"])
-                new_level = st.selectbox("Leistungsniveau",levels,index=current_level_index)
-                new_max_hr = st.number_input("Maximale Herzfrequenz",min_value=100,max_value=220,value=int(user["max_hr"]),step=1)
+        with col2:
+            new_weight = st.number_input("Gewicht in kg",min_value=40,max_value=200,value=int(user["weight"]),step=1,key="edit_weight")
+            levels = ["Anfänger", "Fortgeschritten", "Profi"]
+            # Aktuelle Position des Leistungsniveaus bestimmen
+            current_level_index = levels.index(user["level"])
+            new_level = st.selectbox("Leistungsniveau",levels,index=current_level_index,key="edit_level")
+            new_max_hr = st.number_input("Maximale Herzfrequenz",min_value=100,max_value=220,value=int(user["max_hr"]),step=1,key="edit_max_hr")
 
-            save_changes = st.form_submit_button("Änderungen speichern",type="primary")
+        st.markdown("**HF-Zonen**")
+        zone_methods = ["max_hr", "age", "manual"]
+        current_method = user.get("zone_method", "max_hr")
+        if pd.isna(current_method) or current_method not in zone_methods:
+            current_method = "max_hr"
+        new_zone_method = st.selectbox(
+            "HF-Zonen-Methode", zone_methods,
+            index=zone_methods.index(current_method),
+            format_func=ZONE_METHOD_LABELS.get,
+            key="edit_zone_method",
+        )
+
+        new_hr_bound_1 = new_hr_bound_2 = new_hr_bound_3 = new_hr_bound_4 = None
+        if new_zone_method == "manual":  #nur hier braucht es feste bpm-Grenzen
+
+            def _existing_bound(field, fallback):  #vorhandenen Wert nutzen, sonst Vorschlag aus max_hr
+                value = user.get(field)
+                return int(value) if value is not None and not pd.isna(value) else fallback
+
+            bcol1, bcol2, bcol3, bcol4 = st.columns(4)
+            new_hr_bound_1 = bcol1.number_input("Z1/Z2 (bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_1", round(0.6 * new_max_hr)), key="edit_bound_1")
+            new_hr_bound_2 = bcol2.number_input("Z2/Z3 (bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_2", round(0.7 * new_max_hr)), key="edit_bound_2")
+            new_hr_bound_3 = bcol3.number_input("Z3/Z4 (bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_3", round(0.8 * new_max_hr)), key="edit_bound_3")
+            new_hr_bound_4 = bcol4.number_input("Z4/Z5 (bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_4", round(0.9 * new_max_hr)), key="edit_bound_4")
+
+        save_changes = st.button("Änderungen speichern",type="primary",key="edit_save_button")
 
         if save_changes:
 
@@ -228,6 +279,14 @@ def show_profile(): #zeigt das Profil, Code relativ lang, könnte man aufteilen
                     new_max_hr)
 
                 if update_successful:
+                    if new_zone_method == "manual":
+                        update_zone_settings(
+                            st.session_state.current_user, new_zone_method,
+                            new_hr_bound_1, new_hr_bound_2, new_hr_bound_3, new_hr_bound_4,
+                        )
+                    else:  #bei max_hr/age braucht es keine festen Grenzen
+                        update_zone_settings(st.session_state.current_user, new_zone_method)
+
                     st.session_state.profile_updated = True
                     st.rerun()
 
