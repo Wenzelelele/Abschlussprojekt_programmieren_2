@@ -11,7 +11,7 @@ jeweils andere Richtung - kein Konflikt, keine Rechen-Schleife.
 
 Erwartet in st.session_state (vom Trainingsdaten-Tab):
     pace_hr_bins = {"up": {"Z1": ..., ...}, "flat": {...}, "down": {...}}
-    ef_up, ef_flat, ef_down, max_distance_km = float
+    ef_up, ef_flat, ef_down, max_distance_km, max_elevation_m = float
 """
 
 
@@ -31,7 +31,7 @@ from functions.pace_model import (
     estimate_zone_for_target_time,
     total_time_for_zone,
 )
-from functions.distance_check import check_distance_ambition
+from functions.distance_check import check_distance_ambition, check_elevation_ambition
 from functions.route_storage import delete_route, get_routes_for_user, save_route
 
 # Mitgelieferte Beispielstrecke, damit der Tab sofort getestet werden kann,
@@ -163,6 +163,7 @@ def render_route_tab():
         st.session_state["ef_down"],
     )
     max_distance_km = st.session_state["max_distance_km"]
+    max_elevation_m = st.session_state["max_elevation_m"]
 
     # Layout-Slots vorab anlegen (bestimmt Position auf der Seite),
     # befuellt wird erst weiter unten im Code.
@@ -235,12 +236,17 @@ def render_route_tab():
         marker_idx = st.slider("Position auf der Strecke", 0, len(segments) - 1, 0)
 
     # -------------------------------------------------------------
-    # Schritt B: Streckenlängen-Check (unabhängig von Zone/Zeit)
+    # Schritt B: Strecken- und Höhenmeter-Check (unabhängig von Zone/Zeit)
     # -------------------------------------------------------------
     distance_check = check_distance_ambition(route_distance_km, max_distance_km)
     if distance_check["is_too_ambitious"]:
         with header:
             st.info(distance_check["message"])
+
+    elevation_check = check_elevation_ambition(route.total_ascent_m, max_elevation_m)
+    if elevation_check["is_too_ambitious"]:
+        with header:
+            st.info(elevation_check["message"])
 
     with header:
         st.markdown(

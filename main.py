@@ -31,6 +31,7 @@ def init_route_test_data():
         st.session_state["ef_flat"] = 1.10
         st.session_state["ef_down"] = 1.20
         st.session_state["max_distance_km"] = 10.0
+        st.session_state["max_elevation_m"] = 400.0
         # markiert fuer den Route-Tab: Mock statt echter Daten
         st.session_state["training_data_source"] = "mock"
 
