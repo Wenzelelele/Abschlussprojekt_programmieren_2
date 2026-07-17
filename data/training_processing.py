@@ -246,7 +246,7 @@ def _normalize_time(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def preprocess(
-    df: pd.DataFrame, zone_boundaries: dict, window: int = 60
+    df: pd.DataFrame, zone_boundaries: dict, window: int = 30
 ) -> pd.DataFrame:
     """
     Glaettet Rohdaten (zeitbasiertes Rolling Window) und leitet die
@@ -255,6 +255,23 @@ def preprocess(
     Steigung und Pace werden bewusst NICHT von Punkt zu Punkt berechnet
     (GPS-Rauschen!), sondern ueber die Summen der letzten `window`
     Sekunden: grade = Hoehenmeter im Fenster / Distanz im Fenster.
+
+    WARUM 30s (nicht mehr 60s): Wenzels Routen-Segmentierung in
+    gpx_processing.py (resample_route) rechnet mit festen 100m-Segmenten.
+    Bei typischem Renntempo (~3 m/s) entsprechen 100m ca. 30-35s - ein
+    60s-Fenster deckt dagegen ~180-200m ab und glaettet damit deutlich
+    staerker als Wenzels Segmente. Die Diskrepanz faellt vor allem bei
+    der Rueckrechnung von GAP- auf reale Pace auf (calc_real_pace_from_gap
+    nutzt die exakte, kaum geglaettete Segment-Steigung), weil die
+    Minetti-Formel bei stark unterschiedlichen Steigungswerten stark
+    unterschiedliche Umrechnungsfaktoren liefert - eine bei 60s geglaettete
+    Steigung von z.B. 10% kann an derselben Stelle bei 100m-Segmenten als
+    25% erscheinen, was die vorhergesagte Pace dort massiv verzerrt.
+    30s ist ein Kompromiss: bei zuegigem Tempo nah an 100m, bei langsamem
+    Bergauf-Gehen bleibt eine Restluecke (kein perfektes Matching ueber
+    ein einfaches Zeitfenster moeglich, da Wenzels Segmente distanz- und
+    unsere zeitbasiert bleiben - vollstaendige Angleichung waere eine
+    groessere Umstellung).
 
     Input:  df - Rohdaten aus load_training_gpx/load_training_fit
             zone_boundaries - fertige HF-Zonen-Grenzen (von aussen

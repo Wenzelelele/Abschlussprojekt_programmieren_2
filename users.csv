@@ -1,4 +1,4 @@
 username,password,name,age,height,weight,level,max_hr,user_id,zone_method,hr_bound_1,hr_bound_2,hr_bound_3,hr_bound_4
 kevjames,kevinjames04,Kevin James,20,177,78,Anfänger,200,e6b3c4da-87f6-4af4-9047-043504fecb4f,max_hr,,,,
 Wenzel,1234,Wenzel,21,181,70,Fortgeschritten,210,a5ae3752-0148-45b7-9999-3fb7b3d154c2,max_hr,,,,
-hans,Starkerläufer1,Hannes,24,179,72,Fortgeschritten,200,cc408aaa-471c-4161-9b11-745b497b3190,manual,130.0,152.0,164.0,180.0
+hans,Starkerläufer1,Hannes,24,179,72,Fortgeschritten,207,cc408aaa-471c-4161-9b11-745b497b3190,manual,142.0,144.0,164.0,180.0
