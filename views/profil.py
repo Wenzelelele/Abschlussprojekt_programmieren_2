@@ -84,10 +84,10 @@ def register_page(): #Profil erstellen, falls nicht vorhanden
     hr_bound_1 = hr_bound_2 = hr_bound_3 = hr_bound_4 = None
     if zone_method == "manual":                             #nur hier braucht es feste bpm-Grenzen
         bcol1, bcol2, bcol3, bcol4 = st.columns(4)
-        hr_bound_1 = bcol1.number_input("Z1/Z2 (bpm)", min_value=60, max_value=230, value=round(0.6 * max_hr))
-        hr_bound_2 = bcol2.number_input("Z2/Z3 (bpm)", min_value=60, max_value=230, value=round(0.7 * max_hr))
-        hr_bound_3 = bcol3.number_input("Z3/Z4 (bpm)", min_value=60, max_value=230, value=round(0.8 * max_hr))
-        hr_bound_4 = bcol4.number_input("Z4/Z5 (bpm)", min_value=60, max_value=230, value=round(0.9 * max_hr))
+        hr_bound_1 = bcol1.number_input("Obergrenze Z1(bpm)", min_value=60, max_value=230, value=round(0.6 * max_hr))
+        hr_bound_2 = bcol2.number_input("Obergrenze Z2(bpm)", min_value=60, max_value=230, value=round(0.7 * max_hr))
+        hr_bound_3 = bcol3.number_input("Obergrenze Z3(bpm)", min_value=60, max_value=230, value=round(0.8 * max_hr))
+        hr_bound_4 = bcol4.number_input("Obergrenze Z4/Darüber Z5(bpm)", min_value=60, max_value=230, value=round(0.9 * max_hr))
 
     if st.button("Profil speichern"):  # Button zum Speichern
 
@@ -256,10 +256,10 @@ def show_profile(): #zeigt das Profil, Code relativ lang, könnte man aufteilen
                 return int(value) if value is not None and not pd.isna(value) else fallback
 
             bcol1, bcol2, bcol3, bcol4 = st.columns(4)
-            new_hr_bound_1 = bcol1.number_input("Z1/Z2 (bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_1", round(0.6 * new_max_hr)), key="edit_bound_1")
-            new_hr_bound_2 = bcol2.number_input("Z2/Z3 (bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_2", round(0.7 * new_max_hr)), key="edit_bound_2")
-            new_hr_bound_3 = bcol3.number_input("Z3/Z4 (bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_3", round(0.8 * new_max_hr)), key="edit_bound_3")
-            new_hr_bound_4 = bcol4.number_input("Z4/Z5 (bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_4", round(0.9 * new_max_hr)), key="edit_bound_4")
+            new_hr_bound_1 = bcol1.number_input("Obergrenze Z1(bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_1", round(0.6 * new_max_hr)), key="edit_bound_1")
+            new_hr_bound_2 = bcol2.number_input("Obergrenze Z2(bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_2", round(0.7 * new_max_hr)), key="edit_bound_2")
+            new_hr_bound_3 = bcol3.number_input("Obergrenze Z3(bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_3", round(0.8 * new_max_hr)), key="edit_bound_3")
+            new_hr_bound_4 = bcol4.number_input("Obergrenze Z4/Darüber Z5(bpm)", min_value=60, max_value=230, value=_existing_bound("hr_bound_4", round(0.9 * new_max_hr)), key="edit_bound_4")
 
         save_changes = st.button("Änderungen speichern",type="primary",key="edit_save_button")
 
