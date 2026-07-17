@@ -18,10 +18,10 @@ from functions.hr_zones import hr_to_zone
 from functions.pace_model import grade_to_class
 
 # Einheitliche, kurze Nutzer-Meldungen fuer nicht verwertbare Dateien
-NOT_A_RUN_MSG = "Das ist kein Lauf - bitte lade eine Lauf-Aktivitaet hoch."
+NOT_A_RUN_MSG = "Das ist kein Lauf - bitte lade eine Lauf-Aktivität hoch."
 INVALID_FILE_MSG = (
-    "Diese Datei ist nicht gueltig (z.B. fehlende Herzfrequenz) - "
-    "bitte versuch eine andere Aktivitaet."
+    "Diese Datei ist nicht gültig (z.B. fehlende Herzfrequenz) - "
+    "bitte versuch eine andere Aktivität."
 )
 
 # Best-Effort-Erkennung von Nicht-Lauf-GPX ueber das optionale <trk><type>-Tag.

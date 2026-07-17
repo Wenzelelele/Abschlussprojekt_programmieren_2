@@ -38,22 +38,22 @@ ZONE_METHOD_LABELS = {
 
 RECOMMENDATIONS = {
     "up": (
-        "Deine Effizienz bergauf ist relativ zu deinen anderen Gelaendearten "
-        "am schwaechsten. Baue 1x pro Woche Huegelintervalle ein "
-        "(z.B. 8x 60 Sekunden zuegig bergauf, Trabpause bergab) und achte "
+        "Deine Effizienz bergauf ist relativ zu deinen anderen Geländearten "
+        "am schwächsten. Baue 1x pro Woche Hügelintervalle ein "
+        "(z.B. 8x 60 Sekunden zügig bergauf, Trabpause bergab) und achte "
         "auf kurze Schritte und aufrechte Haltung am Anstieg."
     ),
     "flat": (
         "Deine Effizienz in der Ebene ist relativ zu deinen anderen "
-        "Gelaendearten am schwaechsten. Klassische Tempodauerlaeufe "
-        "(20-30 Minuten an der Schwelle) und Lauf-ABC fuer die "
-        "Schrittoekonomie bringen hier am meisten."
+        "Geländearten am schwächsten. Klassische Tempodauerläufe "
+        "(20-30 Minuten an der Schwelle) und Lauf-ABC für die "
+        "Schrittökonomie bringen hier am meisten."
     ),
     "down": (
-        "Deine Effizienz bergab ist relativ zu deinen anderen Gelaendearten "
-        "am schwaechsten. Trainiere kontrollierte Bergab-Laeufe auf leichtem "
-        "Gefaelle (Schrittfrequenz hoch, Bremsen vermeiden) - die exzentrische "
-        "Belastung braucht Gewoehnung, also dosiert steigern."
+        "Deine Effizienz bergab ist relativ zu deinen anderen Geländearten "
+        "am schwächsten. Trainiere kontrollierte Bergab-Läufe auf leichtem "
+        "Gefälle (Schrittfrequenz hoch, Bremsen vermeiden) - die exzentrische "
+        "Belastung braucht Gewöhnung, also dosiert steigern."
     ),
 }
 
@@ -66,8 +66,11 @@ def _format_pace(sec_per_km: float) -> str:
 
 def display_terrain(df: pd.DataFrame | None, ef_factors: dict) -> None:
     """
-    Zeigt die Effizienz je Gelaendeart als Balkendiagramm und (falls der
-    gepoolte DataFrame in dieser Session vorliegt) eine Detail-Tabelle.
+    Zeigt die Effizienz je Geländeart als 3 Kästchen nebeneinander
+    (gleicher Stil wie die Panels im Routen-Tab: st.container mit
+    border=True, abgerundete Ecken, rgba-Hintergrund) und - falls der
+    gepoolte DataFrame in dieser Session vorliegt - eine Detail-Tabelle
+    mit realer UND GAP-Pace nebeneinander.
 
     Input:  df - terrain-klassifizierter DataFrame oder None (None nach
                  einem Login, wenn nur die gespeicherten Aggregate da sind)
@@ -78,18 +81,24 @@ def display_terrain(df: pd.DataFrame | None, ef_factors: dict) -> None:
         st.info("Noch keine Effizienzwerte vorhanden.")
         return
 
-    chart_df = pd.DataFrame(
-        {
-            "Effizienzfaktor": [
-                ef_factors[t] for t in ("up", "flat", "down") if t in ef_factors
-            ]
-        },
-        index=[TERRAIN_LABELS_DE[t] for t in ("up", "flat", "down") if t in ef_factors],
-    )
     st.markdown(
-        "**Effizienzfaktor je Gelaendeart** (GAP-Tempo in m/min pro Puls-Schlag - hoeher = besser)"
+        "**Effizienzfaktor je Geländeart** "
+        "(GAP-Tempo in m/min pro Puls-Schlag - höher = besser)"
     )
-    st.bar_chart(chart_df, horizontal=True)
+    cols = st.columns(3)
+    for col, terrain in zip(cols, ("up", "flat", "down")):
+        with col:
+            box_key = f"ef_box_{terrain}"
+            with st.container(key=box_key, border=True):
+                st.html(f"""
+                    <style>
+                    .st-key-{box_key} {{
+                        background-color: rgba(255, 244, 214, 0.96);
+                    }}
+                    </style>
+                    """)
+                value = f"{ef_factors[terrain]:.2f}" if terrain in ef_factors else "–"
+                st.metric(TERRAIN_LABELS_DE[terrain], value)
 
     if df is None or df.empty:
         return
@@ -99,13 +108,21 @@ def display_terrain(df: pd.DataFrame | None, ef_factors: dict) -> None:
     for terrain, group in df.groupby("terrain"):
         rows.append(
             {
-                "Gelaende": TERRAIN_LABELS_DE.get(terrain, terrain),
+                "Gelände": TERRAIN_LABELS_DE.get(terrain, terrain),
                 "Anteil Distanz": f"{group['dist_delta_m'].sum() / total_dist * 100:.0f} %",
                 "Ø Herzfrequenz": f"{group['hr'].mean():.0f} bpm",
+                "Ø reale Pace": _format_pace(group["pace_sec_per_km"].mean()),
                 "Ø GAP-Pace": _format_pace(group["gap_pace"].mean()),
             }
         )
     st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    st.caption(
+        "GAP-Pace normalisiert auf gleiche Anstrengung wie in der Ebene - "
+        "dadurch wirkt sie bergauf schneller und bergab langsamer als die "
+        "reale Pace, obwohl es in echt fast immer umgekehrt ist. Für den "
+        "direkten Vergleich zählt die reale Pace, GAP macht die drei "
+        "Geländearten untereinander fair vergleichbar."
+    )
 
 
 def generate_recommendation(ef_factors: dict) -> str:
@@ -120,9 +137,9 @@ def generate_recommendation(ef_factors: dict) -> str:
         return "Noch keine Trainingsdaten vorhanden - lade zuerst einen Lauf hoch."
     if len(ef_factors) < 2:
         return (
-            "Deine bisherigen Laeufe enthalten nur eine Gelaendeart - fuer einen "
-            "Vergleich (und einen gezielten Tipp) brauchst du Laeufe mit Anstiegen "
-            "UND Flachstuecken."
+            "Deine bisherigen Läufe enthalten nur eine Geländeart - für einen "
+            "Vergleich (und einen gezielten Tipp) brauchst du Läufe mit Anstiegen "
+            "UND Flachstücken."
         )
 
     weakest = min(ef_factors, key=ef_factors.get)
@@ -162,6 +179,7 @@ def _load_summary_into_session(person_id: str) -> None:
         summary["pace_hr_bins"],
         summary["max_distance_km"],
         summary["max_elevation_m"],
+        summary.get("n_runs", 0),
         source="db",
     )
 
@@ -171,6 +189,7 @@ def _write_contract_to_session(
     pace_hr_bins: dict,
     max_distance_km: float,
     max_elevation_m: float,
+    n_runs: int,
     source: str,
 ) -> None:
     """
@@ -187,6 +206,7 @@ def _write_contract_to_session(
     st.session_state["ef_down"] = ef_factors.get("down", fallback_ef)
     st.session_state["max_distance_km"] = max_distance_km
     st.session_state["max_elevation_m"] = max_elevation_m
+    st.session_state["n_runs"] = n_runs
     st.session_state["training_data_source"] = source
 
 
@@ -216,9 +236,9 @@ def _zone_boundaries_from_profile(profile) -> dict:
         bounds = [profile.get(f"hr_bound_{i}") for i in range(1, 5)]
         if any(pd.isna(b) for b in bounds):
             st.warning(
-                "Im Profil ist die manuelle HF-Zonen-Methode gewaehlt, aber "
-                "nicht alle 4 Grenzwerte sind ausgefuellt - nutze stattdessen "
-                "die prozentuale Berechnung ueber deine max. HF. Trag die "
+                "Im Profil ist die manuelle HF-Zonen-Methode gewählt, aber "
+                "nicht alle 4 Grenzwerte sind ausgefüllt - nutze stattdessen "
+                "die prozentuale Berechnung über deine max. HF. Trag die "
                 "fehlenden Werte im Profil-Tab nach."
             )
             return get_zone_boundaries_maxhr(max_hr)
@@ -230,7 +250,7 @@ def _zone_boundaries_from_profile(profile) -> dict:
     return get_zone_boundaries_maxhr(max_hr)
 
 
-MAX_MANUAL_RUNS = 30
+MAX_MANUAL_RUNS = 100
 
 
 def _run_pipeline(
@@ -276,7 +296,7 @@ def _run_pipeline(
             (
                 file.name,
                 f"Nicht verarbeitet - beim manuellen Upload werden nur die "
-                f"neuesten {MAX_MANUAL_RUNS} Laeufe ausgewertet.",
+                f"neuesten {MAX_MANUAL_RUNS} Läufe ausgewertet.",
             )
         )
 
@@ -319,8 +339,8 @@ def render_training_tab() -> None:
     _load_summary_into_session(person_id)
 
     st.markdown(
-        "Lade vergangene Laeufe hoch (FIT, TCX oder GPX). Daraus berechnen "
-        "wir deine Effizienz je Gelaendeart - die Basis fuer die "
+        "Lade vergangene Läufe hoch (FIT, TCX oder GPX). Daraus berechnen "
+        "wir deine Effizienz je Geländeart - die Basis für die "
         "Pace-Vorhersage im Routen-Tab."
     )
 
@@ -335,33 +355,33 @@ def render_training_tab() -> None:
     )
     st.caption(
         f"HF-Zonen-Methode: **{method_label}** (aus deinem Profil). Falls du "
-        "das aendern willst - Berechnungsmethode, max. HF, Alter oder "
+        "das ändern willst - Berechnungsmethode, max. HF, Alter oder "
         "manuelle Zonengrenzen - trag das im **Profil-Tab** ein, bevor du "
-        "hier hochlaedst."
+        "hier hochlädst."
     )
     uploaded_files = st.file_uploader(
-        "Trainingslaeufe hochladen (FIT, TCX oder GPX)",
+        "Trainingsläufe hochladen (FIT, TCX oder GPX)",
         type=["gpx", "fit", "tcx"],
         accept_multiple_files=True,
         help=(
-            "Exportiere einzelne Laeufe direkt aus deiner Sport-App "
-            "(z.B. Garmin Connect oder Wahoo: Aktivitaet oeffnen -> "
+            "Exportiere einzelne Läufe direkt aus deiner Sport-App "
+            "(z.B. Garmin Connect oder Wahoo: Aktivität öffnen -> "
             "Exportieren -> FIT oder TCX) und lade am besten ein paar "
-            "lange Laeufe oder Rennen hoch. Bei mehr als "
+            "lange Läufe oder Rennen hoch. Bei mehr als "
             f"{MAX_MANUAL_RUNS} Dateien werden nur die neuesten "
             f"{MAX_MANUAL_RUNS} ausgewertet."
         ),
     )
 
     if uploaded_files and st.button("Trainingsdaten auswerten", type="primary"):
-        with st.spinner("Werte Laeufe aus..."):
+        with st.spinner("Werte Läufe aus..."):
             training, skipped = _run_pipeline(
                 uploaded_files, zone_boundaries, person_id
             )
 
         if skipped:
             with st.expander(
-                f"{len(skipped)} von {len(uploaded_files)} Datei(en) uebersprungen",
+                f"{len(skipped)} von {len(uploaded_files)} Datei(en) übersprungen",
                 expanded=not training.ef_factors,
             ):
                 for name, reason in skipped:
@@ -380,12 +400,14 @@ def render_training_tab() -> None:
             training.pace_hr_bins,
             training.max_distance_km,
             training.max_elevation_m,
+            training.n_runs,
         )
         _write_contract_to_session(
             training.ef_factors,
             training.pace_hr_bins,
             training.max_distance_km,
             training.max_elevation_m,
+            training.n_runs,
             source="upload",
         )
         # Gepoolter df + Zonen-Grenzen nur fuer die Detail-Anzeige in DIESER
@@ -395,7 +417,7 @@ def render_training_tab() -> None:
         st.session_state["hr_zone_boundaries"] = zone_boundaries
         n_ok = len(uploaded_files) - len(skipped)
         st.success(
-            f"{n_ok} von {len(uploaded_files)} Lauf/Laeufen ausgewertet und gespeichert."
+            f"{n_ok} von {len(uploaded_files)} Lauf/Läufen ausgewertet und gespeichert."
         )
 
     _render_results()
@@ -423,9 +445,10 @@ def _render_results() -> None:
     )
 
     st.divider()
-    col1, col2 = st.columns(2)
-    col1.metric("Laengster Lauf", f"{st.session_state['max_distance_km']:.1f} km")
-    col2.metric("Meiste Hoehenmeter", f"{st.session_state['max_elevation_m']:.0f} m")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Trainingsläufe", int(st.session_state.get("n_runs", 0)))
+    col2.metric("Längster Lauf", f"{st.session_state['max_distance_km']:.1f} km")
+    col3.metric("Meiste Höhenmeter", f"{st.session_state['max_elevation_m']:.0f} m")
 
     if "hr_zone_boundaries" in st.session_state:
         with st.expander("Deine HF-Zonen-Grenzen"):
@@ -447,7 +470,7 @@ def _render_results() -> None:
     st.info(generate_recommendation(ef_factors))
 
     with st.expander(
-        "Basis-Pace je Gelaende und HF-Zone (Grundlage der Routen-Vorhersage)"
+        "Basis-Pace je Gelände und HF-Zone (Grundlage der Routen-Vorhersage)"
     ):
         bins = st.session_state["pace_hr_bins"]
         table = pd.DataFrame(

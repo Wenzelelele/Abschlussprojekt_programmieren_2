@@ -21,6 +21,7 @@ class TrainingData:
         pace_hr_bins: dict      - {"up": {"Z1": .., ...}, ...}
         max_distance_km: float  - laengster einzelner Run
         max_elevation_m: float  - meiste Hoehenmeter in einer Aktivitaet
+        n_runs: int             - Anzahl erfolgreich verarbeiteter Runs
     """
 
     def __init__(self, person_id: str):
@@ -30,6 +31,7 @@ class TrainingData:
         self.pace_hr_bins: dict = {}
         self.max_distance_km = 0.0
         self.max_elevation_m = 0.0
+        self.n_runs = 0
 
     def add_run(self, run_df: pd.DataFrame) -> None:
         """
@@ -75,3 +77,4 @@ class TrainingData:
 
         self.max_distance_km = float(dist_km_per_run.max())
         self.max_elevation_m = float(ascent_per_run.max())
+        self.n_runs = self.df["run_id"].nunique()

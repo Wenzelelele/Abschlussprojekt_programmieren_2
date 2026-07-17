@@ -64,6 +64,48 @@ def calc_gap_pace(pace: float, grade_pct: float) -> float:
     return float(gap) if np.ndim(gap) == 0 else gap
 
 
+def calc_real_pace_from_gap(gap_pace: float, grade_pct: float) -> float:
+    """
+    Rechnet GAP-Pace zurueck in die erwartete REALE Pace fuer eine
+    gegebene Steigung - die exakte Umkehrung von calc_gap_pace().
+
+    Wird gebraucht, weil GAP intern die richtige Vergleichsgroesse ist
+    (Steigungen fair vergleichbar machen), aber fuer die Anzeige an den
+    Nutzer die falsche: GAP macht bergauf "schneller" und bergab
+    "langsamer" aussehen, als es real ist (siehe Docstring von
+    calc_gap_pace) - genau umgekehrt zur Erwartung. Fuer eine Pace-
+    Vorhersage, die der Nutzer als "so schnell werde ich hier laufen"
+    liest (z.B. im Routen-Tab), muss GAP deshalb pro Segment mit der
+    TATSAECHLICHEN Steigung wieder zurueckgerechnet werden:
+
+        real_pace = gap_pace * C(i) / C(0)
+
+    (einfach calc_gap_pace mit vertauschtem Bruch - siehe dortige
+    Herleitung fuer C(i)).
+
+    Input:  gap_pace - GAP-Pace in sec/km
+            grade_pct - TATSAECHLICHE Steigung dieses Punkts/Segments
+                        in Prozent (nicht nur die grobe up/flat/down-
+                        Klasse, sonst ist die Rueckrechnung ungenau)
+    Output: reale, erwartete Pace in sec/km
+    """
+    i = np.clip(
+        np.asarray(grade_pct, dtype=float) / 100.0,
+        -MAX_GRADE_FRACTION,
+        MAX_GRADE_FRACTION,
+    )
+    cost = (
+        155.4 * i**5
+        - 30.4 * i**4
+        - 43.3 * i**3
+        + 46.3 * i**2
+        + 19.5 * i
+        + _FLAT_ENERGY_COST
+    )
+    real = gap_pace * cost / _FLAT_ENERGY_COST
+    return float(real) if np.ndim(real) == 0 else real
+
+
 def calc_efficiency_factor(df: pd.DataFrame) -> tuple[dict, dict]:
     """
     Berechnet aus allen gepoolten Runs: 1) einen EF pro Gelaendeart,
