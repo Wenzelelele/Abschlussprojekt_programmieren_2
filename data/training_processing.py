@@ -7,6 +7,8 @@ und grade_to_class aus pace_model.py, damit beide Tabs dieselbe
 Distanzformel und dieselbe +-3%-Gelaende-Schwelle verwenden.
 """
 
+import xml.etree.ElementTree as ET
+
 import numpy as np
 import pandas as pd
 
@@ -14,6 +16,31 @@ from data.gpx_processing import haversine_m
 from functions.efficiency import calc_gap_pace
 from functions.hr_zones import hr_to_zone
 from functions.pace_model import grade_to_class
+
+# Einheitliche, kurze Nutzer-Meldungen fuer nicht verwertbare Dateien
+NOT_A_RUN_MSG = "Das ist kein Lauf - bitte lade eine Lauf-Aktivitaet hoch."
+INVALID_FILE_MSG = (
+    "Diese Datei ist nicht gueltig (z.B. fehlende Herzfrequenz) - "
+    "bitte versuch eine andere Aktivitaet."
+)
+
+# Best-Effort-Erkennung von Nicht-Lauf-GPX ueber das optionale <trk><type>-Tag.
+# GPX hat kein verpflichtendes Sport-Feld - fehlt das Tag, lassen wir die
+# Datei durch (keine Info ist nicht dasselbe wie falsche Info).
+_NON_RUN_TYPE_HINTS = (
+    "bike",
+    "biking",
+    "cycling",
+    "ride",
+    "radfahr",
+    "rad",
+    "ski",
+    "swim",
+    "schwimm",
+    "hike",
+    "wander",
+    "walk",
+)
 
 # Umrechnung FIT-Semicircles -> Grad (FIT speichert Koordinaten als
 # 32-Bit-Ganzzahl ueber den vollen Kreis).
@@ -66,6 +93,13 @@ def load_training_gpx(file_obj) -> pd.DataFrame:
 
     gpx = gpxpy.parse(_read_text(file_obj))
 
+    # Sportart-Check (best effort): nur wenn das optionale type-Tag klar
+    # auf eine andere Sportart hinweist, lehnen wir ab.
+    for track in gpx.tracks:
+        track_type = (track.type or "").lower()
+        if any(hint in track_type for hint in _NON_RUN_TYPE_HINTS):
+            raise ValueError(NOT_A_RUN_MSG)
+
     rows = []
     for track in gpx.tracks:
         for segment in track.segments:
@@ -81,14 +115,11 @@ def load_training_gpx(file_obj) -> pd.DataFrame:
                 )
 
     if len(rows) < 2:
-        raise ValueError("GPX-Datei enthaelt keine verwertbaren Trackpunkte.")
+        raise ValueError(INVALID_FILE_MSG)
 
     df = pd.DataFrame(rows)
     if df["time"].isna().all():
-        raise ValueError(
-            "GPX-Datei enthaelt keine Zeitstempel - ohne <time> ist keine "
-            "Pace-Berechnung moeglich (Strecken-GPX statt Trainings-GPX?)."
-        )
+        raise ValueError(INVALID_FILE_MSG)
     return _normalize_time(df)
 
 
@@ -107,7 +138,15 @@ def load_training_fit(file_obj) -> pd.DataFrame:
     stream = Stream.from_byte_array(bytearray(raw))
     messages, errors = Decoder(stream).read()
     if errors:
-        raise ValueError(f"FIT-Datei konnte nicht gelesen werden: {errors}")
+        raise ValueError(INVALID_FILE_MSG)
+
+    # Sportart-Check: FIT kennt die Sportart explizit (session.sport).
+    # Allow-Liste statt Aufzaehlung aller Nicht-Lauf-Sportarten: nur
+    # "running" wird akzeptiert; fehlt die Angabe, lassen wir durch.
+    sessions = messages.get("session_mesgs") or []
+    sport = sessions[0].get("sport") if sessions else None
+    if sport is not None and sport != "running":
+        raise ValueError(NOT_A_RUN_MSG)
 
     rows = []
     for record in messages.get("record_mesgs", []):
@@ -126,7 +165,72 @@ def load_training_fit(file_obj) -> pd.DataFrame:
         )
 
     if len(rows) < 2:
-        raise ValueError("FIT-Datei enthaelt keine verwertbaren GPS-Records.")
+        raise ValueError(INVALID_FILE_MSG)
+
+    return _normalize_time(pd.DataFrame(rows))
+
+
+def load_training_tcx(file_obj) -> pd.DataFrame:
+    """
+    Liest eine TCX-Datei ein (Garmin Training Center XML, z.B. direkter
+    Export aus Garmin Connect oder Wahoo). TCX ist reines XML mit festem
+    Schema - wir nutzen die Standardbibliothek, keine neue Abhaengigkeit.
+
+    Sportart-Check: TCX kennt am <Activity>-Tag nur "Running", "Biking"
+    und "Other". "Biking" wird abgelehnt; "Other" ist ein Catch-all und
+    wird durchgelassen (keine Info ist nicht dasselbe wie falsche Info).
+
+    Input:  file_obj - hochgeladene TCX-Datei
+    Output: DataFrame, gleiches Format wie load_training_gpx
+    """
+    try:
+        root = ET.fromstring(_read_text(file_obj))
+    except ET.ParseError:
+        raise ValueError(INVALID_FILE_MSG)
+
+    def _local(tag: str) -> str:
+        """Tag-Name ohne XML-Namespace ('{ns}Trackpoint' -> 'Trackpoint')."""
+        return tag.rsplit("}", 1)[-1]
+
+    rows = []
+    for activity in root.iter():
+        if _local(activity.tag) != "Activity":
+            continue
+        if activity.get("Sport") == "Biking":
+            raise ValueError(NOT_A_RUN_MSG)
+
+        for tp in activity.iter():
+            if _local(tp.tag) != "Trackpoint":
+                continue
+            point = {
+                "lat": np.nan,
+                "lon": np.nan,
+                "ele": np.nan,
+                "time": None,
+                "hr": np.nan,
+            }
+            for el in tp.iter():
+                tag, text = _local(el.tag), (el.text or "").strip()
+                if tag == "HeartRateBpm":
+                    # <HeartRateBpm><Value>142</Value></HeartRateBpm>
+                    for child in el:
+                        if _local(child.tag) == "Value" and child.text:
+                            point["hr"] = float(child.text)
+                elif not text:
+                    continue
+                elif tag == "Time":
+                    point["time"] = text
+                elif tag == "LatitudeDegrees":
+                    point["lat"] = float(text)
+                elif tag == "LongitudeDegrees":
+                    point["lon"] = float(text)
+                elif tag == "AltitudeMeters":
+                    point["ele"] = float(text)
+            if point["time"] is not None:
+                rows.append(point)
+
+    if len(rows) < 2:
+        raise ValueError(INVALID_FILE_MSG)
 
     return _normalize_time(pd.DataFrame(rows))
 
@@ -166,7 +270,7 @@ def preprocess(
         .copy()
     )
     if len(out) < 2:
-        raise ValueError("Zu wenige gueltige Trackpunkte fuer die Auswertung.")
+        raise ValueError(INVALID_FILE_MSG)
 
     # Luecken in Hoehe/HF interpolieren statt Zeilen zu verlieren
     out["ele"] = out["ele"].interpolate(limit_direction="both")
@@ -204,7 +308,11 @@ def preprocess(
 
     # Stillstand, Pausen und GPS-Ausreisser aus der Statistik entfernen
     plausible = out["pace_sec_per_km"].between(MIN_PACE_SEC_PER_KM, MAX_PACE_SEC_PER_KM)
-    return out[plausible & out["hr"].notna()].reset_index(drop=True)
+    result = out[plausible & out["hr"].notna()].reset_index(drop=True)
+
+    if result.empty:
+        raise ValueError(INVALID_FILE_MSG)
+    return result
 
 
 def calc_terrain_split(df: pd.DataFrame) -> pd.DataFrame:

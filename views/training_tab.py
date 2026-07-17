@@ -7,6 +7,8 @@ Trainingsempfehlung. Schreibt die Ergebnisse in st.session_state
 (Datenvertrag mit route_tab.py) und persistiert sie via TinyDB.
 """
 
+import math
+
 import pandas as pd
 import streamlit as st
 
@@ -14,10 +16,10 @@ from data.training_processing import (
     calc_terrain_split,
     load_training_fit,
     load_training_gpx,
+    load_training_tcx,
     preprocess,
 )
 from functions.hr_zones import (
-    estimate_max_hr_tanaka,
     get_zone_boundaries_age,
     get_zone_boundaries_manual,
     get_zone_boundaries_maxhr,
@@ -139,17 +141,19 @@ def generate_recommendation(ef_factors: dict) -> str:
 # ---------------------------------------------------------------------
 
 
-def _load_summary_into_session(username: str) -> None:
+def _load_summary_into_session(person_id: str) -> None:
     """
     Befuellt session_state beim ersten Oeffnen aus der TinyDB, falls dort
     gespeicherte Aggregate liegen. Der Marker training_data_source
-    verhindert, dass echte Daten spaeter von Mock-Werten (main.py)
-    verdeckt werden - und dass wir bei jedem Rerun neu laden.
+    verhindert unnoetiges Neuladen bei jedem Rerun. "mock" (Platzhalter
+    aus main.py, falls der Route-Tab zuerst besucht wurde) zaehlt dabei
+    NICHT als echte Datenquelle - echte gespeicherte Werte ueberschreiben
+    den Mock.
     """
-    if st.session_state.get("training_data_source") is not None:
+    if st.session_state.get("training_data_source") not in (None, "mock"):
         return
 
-    summary = load_training_summary(username)
+    summary = load_training_summary(person_id)
     if summary is None:
         return
 
@@ -186,74 +190,107 @@ def _write_contract_to_session(
     st.session_state["training_data_source"] = source
 
 
-def _zone_boundaries_from_ui(profile) -> dict:
+def _zone_boundaries_from_profile(profile) -> dict:
     """
-    Rendert die Auswahl der HF-Zonen-Methode und gibt die fertigen
-    Grenzen zurueck. Default kommt aus dem Person-Profil (Feld
-    zone_method, siehe Abstimmung mit Jannis) - solange das Feld dort
-    noch nicht existiert, faellt die Auswahl auf 'max_hr' zurueck, weil
-    max_hr in users.csv bereits fuer alle Nutzer gepflegt ist.
+    Baut die HF-Zonen-Grenzen ausschliesslich aus dem Person-Profil.
+    Keine eigene Auswahl mehr im Trainings-Tab - zone_method/hr_bound_1-4
+    werden im Profil-Tab gepflegt (Jannis), das Profil ist die einzige
+    Quelle der Wahrheit dafuer. Fallback auf 'max_hr', falls das Profil
+    (noch) keine zone_method hat - passt zum Default in user_profil.py.
     """
-    methods = list(ZONE_METHOD_LABELS)
-    profile_method = None
-    if profile is not None and "zone_method" in profile.index:
-        profile_method = profile["zone_method"]
+    method = "max_hr"
+    if (
+        profile is not None
+        and "zone_method" in profile.index
+        and pd.notna(profile["zone_method"])
+    ):
+        method = profile["zone_method"]
 
-    default_index = methods.index(profile_method) if profile_method in methods else 0
-    method = st.selectbox(
-        "HF-Zonen-Methode",
-        methods,
-        index=default_index,
-        format_func=ZONE_METHOD_LABELS.get,
-        help="Wird kuenftig im Profil gespeichert (Abstimmung mit Jannis laeuft).",
+    max_hr = (
+        float(profile["max_hr"])
+        if profile is not None and "max_hr" in profile.index
+        else 190.0
     )
 
-    profile_max_hr = float(profile["max_hr"]) if profile is not None else 190.0
-    profile_age = int(profile["age"]) if profile is not None else 30
+    if method == "manual":
+        bounds = [profile.get(f"hr_bound_{i}") for i in range(1, 5)]
+        if any(pd.isna(b) for b in bounds):
+            st.warning(
+                "Im Profil ist die manuelle HF-Zonen-Methode gewaehlt, aber "
+                "nicht alle 4 Grenzwerte sind ausgefuellt - nutze stattdessen "
+                "die prozentuale Berechnung ueber deine max. HF. Trag die "
+                "fehlenden Werte im Profil-Tab nach."
+            )
+            return get_zone_boundaries_maxhr(max_hr)
+        return get_zone_boundaries_manual([float(b) for b in bounds])
 
-    if method == "max_hr":
-        max_hr = st.number_input(
-            "Maximale Herzfrequenz (bpm)", 120.0, 230.0, profile_max_hr
+    if method == "age" and profile is not None and "age" in profile.index:
+        return get_zone_boundaries_age(int(profile["age"]))
+
+    return get_zone_boundaries_maxhr(max_hr)
+
+
+MAX_MANUAL_RUNS = 30
+
+
+def _run_pipeline(
+    uploaded_files, zone_boundaries: dict, person_id: str
+) -> tuple[TrainingData, list[tuple[str, str]]]:
+    """
+    Volle Pipeline fuer den manuellen Multi-Datei-Upload:
+    Datei -> preprocess -> terrain -> TrainingData.
+
+    Zwei-Phasen-Ansatz wegen MAX_MANUAL_RUNS: Phase 1 laedt ALLE Dateien nur
+    (billig, kein Rolling-Window/Haversine), um ihr Startdatum zu kennen.
+    Phase 2 sortiert nach Datum und schickt nur die neuesten MAX_MANUAL_RUNS
+    davon durch preprocess() - das ist der teure Teil (iterative haversine_m
+    aus gpx_processing.py). Aeltere Ueberschuss-Dateien werden uebersprungen,
+    nicht verworfen ohne Erklaerung.
+
+    Eine einzelne nicht auswertbare Datei (Ladefehler oder z.B. fehlende
+    Herzfrequenz) bricht nie den ganzen Batch ab - siehe breiter except-Block.
+
+    Output: (TrainingData, skipped) - skipped: Liste aus (dateiname, grund)
+    """
+    training = TrainingData(person_id=person_id)
+    skipped: list[tuple[str, str]] = []
+    loaded: list[tuple[object, pd.DataFrame]] = []
+
+    for file in uploaded_files:
+        try:
+            suffix = file.name.lower().rsplit(".", 1)[-1]
+            loader = {"fit": load_training_fit, "tcx": load_training_tcx}.get(
+                suffix, load_training_gpx
+            )
+            raw_df = loader(file)
+            loaded.append((file, raw_df))
+        except Exception as exc:  # noqa: BLE001 - siehe Docstring
+            skipped.append((file.name, str(exc)))
+
+    # Neueste zuerst - Startzeitpunkt eines Laufs ist das Minimum der time-Spalte
+    loaded.sort(key=lambda pair: pair[1]["time"].min(), reverse=True)
+
+    to_process = loaded[:MAX_MANUAL_RUNS]
+    for file, _ in loaded[MAX_MANUAL_RUNS:]:
+        skipped.append(
+            (
+                file.name,
+                f"Nicht verarbeitet - beim manuellen Upload werden nur die "
+                f"neuesten {MAX_MANUAL_RUNS} Laeufe ausgewertet.",
+            )
         )
-        return get_zone_boundaries_maxhr(max_hr)
 
-    if method == "age":
-        age = st.number_input("Alter (Jahre)", 10, 100, profile_age)
-        st.caption(
-            f"Geschaetzte max. HF (Tanaka): {estimate_max_hr_tanaka(age):.0f} bpm"
-        )
-        return get_zone_boundaries_age(age)
-
-    # manuell: 4 Trennwerte, Defaults als uebliche Prozentgrenzen der max_hr
-    cols = st.columns(4)
-    defaults = [0.6, 0.7, 0.8, 0.9]
-    bounds = [
-        col.number_input(
-            f"Z{i+1}/Z{i+2} (bpm)", 60.0, 230.0, round(pct * profile_max_hr)
-        )
-        for i, (col, pct) in enumerate(zip(cols, defaults))
-    ]
-    return get_zone_boundaries_manual(bounds)
-
-
-def _run_pipeline(uploaded_files, zone_boundaries: dict, username: str) -> TrainingData:
-    """Volle Pipeline: Datei -> preprocess -> terrain -> TrainingData."""
-    training = TrainingData(person_id=username)
-
-    for i, file in enumerate(uploaded_files):
-        loader = (
-            load_training_fit
-            if file.name.lower().endswith(".fit")
-            else load_training_gpx
-        )
-        run_df = loader(file)
-        run_df = preprocess(run_df, zone_boundaries)
-        run_df = calc_terrain_split(run_df)
-        run_df["run_id"] = f"{i}_{file.name}"
-        training.add_run(run_df)
+    for i, (file, raw_df) in enumerate(to_process):
+        try:
+            run_df = preprocess(raw_df, zone_boundaries)
+            run_df = calc_terrain_split(run_df)
+            run_df["run_id"] = f"{i}_{file.name}"
+            training.add_run(run_df)
+        except Exception as exc:  # noqa: BLE001
+            skipped.append((file.name, str(exc)))
 
     training.compute_all()
-    return training
+    return training, skipped
 
 
 def render_training_tab() -> None:
@@ -268,38 +305,77 @@ def render_training_tab() -> None:
         st.warning("Bitte zuerst einloggen.")
         return
 
-    _load_summary_into_session(username)
     profile = get_user_data(username)
+    # Stabile user_id aus dem Profil (Jannis) als Speicher-Schluessel -
+    # Fallback auf den username, falls die ID (noch) fehlt.
+    person_id = username
+    if (
+        profile is not None
+        and "user_id" in profile.index
+        and pd.notna(profile["user_id"])
+    ):
+        person_id = str(profile["user_id"])
+
+    _load_summary_into_session(person_id)
 
     st.markdown(
-        "Lade einen vergangenen Lauf als **GPX + FIT** hoch. Daraus berechnen "
+        "Lade vergangene Laeufe hoch (FIT, TCX oder GPX). Daraus berechnen "
         "wir deine Effizienz je Gelaendeart - die Basis fuer die "
         "Pace-Vorhersage im Routen-Tab."
     )
 
-    zone_boundaries = _zone_boundaries_from_ui(profile)
+    zone_boundaries = _zone_boundaries_from_profile(profile)
+    method_label = ZONE_METHOD_LABELS.get(
+        (
+            profile["zone_method"]
+            if profile is not None and "zone_method" in profile.index
+            else "max_hr"
+        ),
+        "Prozent der maximalen HF",
+    )
+    st.caption(
+        f"HF-Zonen-Methode: **{method_label}** (aus deinem Profil). Falls du "
+        "das aendern willst - Berechnungsmethode, max. HF, Alter oder "
+        "manuelle Zonengrenzen - trag das im **Profil-Tab** ein, bevor du "
+        "hier hochlaedst."
+    )
     uploaded_files = st.file_uploader(
-        "Trainingslauf hochladen (GPX und/oder FIT)",
-        type=["gpx", "fit"],
+        "Trainingslaeufe hochladen (FIT, TCX oder GPX)",
+        type=["gpx", "fit", "tcx"],
         accept_multiple_files=True,
+        help=(
+            "Exportiere einzelne Laeufe direkt aus deiner Sport-App "
+            "(z.B. Garmin Connect oder Wahoo: Aktivitaet oeffnen -> "
+            "Exportieren -> FIT oder TCX) und lade am besten ein paar "
+            "lange Laeufe oder Rennen hoch. Bei mehr als "
+            f"{MAX_MANUAL_RUNS} Dateien werden nur die neuesten "
+            f"{MAX_MANUAL_RUNS} ausgewertet."
+        ),
     )
 
     if uploaded_files and st.button("Trainingsdaten auswerten", type="primary"):
-        try:
-            with st.spinner("Werte Laeufe aus..."):
-                training = _run_pipeline(uploaded_files, zone_boundaries, username)
-        except ValueError as exc:
-            st.error(f"Auswertung fehlgeschlagen: {exc}")
-            return
+        with st.spinner("Werte Laeufe aus..."):
+            training, skipped = _run_pipeline(
+                uploaded_files, zone_boundaries, person_id
+            )
+
+        if skipped:
+            with st.expander(
+                f"{len(skipped)} von {len(uploaded_files)} Datei(en) uebersprungen",
+                expanded=not training.ef_factors,
+            ):
+                for name, reason in skipped:
+                    st.warning(f"**{name}:** {reason}")
 
         if not training.ef_factors:
             st.error(
-                "Keine verwertbaren Datenpunkte gefunden (fehlt die Herzfrequenz in der Datei?)."
+                "Keine der hochgeladenen Dateien konnte ausgewertet werden "
+                "(Details oben)."
             )
             return
 
         save_training_summary(
-            username,
+            person_id,
             training.ef_factors,
             training.pace_hr_bins,
             training.max_distance_km,
@@ -312,18 +388,29 @@ def render_training_tab() -> None:
             training.max_elevation_m,
             source="upload",
         )
-        # Gepoolter df nur fuer die Detail-Anzeige in DIESER Session -
-        # persistiert werden bewusst nur die Aggregate.
+        # Gepoolter df + Zonen-Grenzen nur fuer die Detail-Anzeige in DIESER
+        # Session - persistiert werden bewusst nur die Aggregate.
         st.session_state["training_df"] = training.df
         st.session_state["training_ef_factors"] = training.ef_factors
-        st.success(f"{len(uploaded_files)} Lauf/Laeufe ausgewertet und gespeichert.")
+        st.session_state["hr_zone_boundaries"] = zone_boundaries
+        n_ok = len(uploaded_files) - len(skipped)
+        st.success(
+            f"{n_ok} von {len(uploaded_files)} Lauf/Laeufen ausgewertet und gespeichert."
+        )
 
     _render_results()
 
 
 def _render_results() -> None:
-    """Zeigt die aktuellen Ergebnisse aus session_state (falls vorhanden)."""
-    if st.session_state.get("training_data_source") is None:
+    """Zeigt die aktuellen Ergebnisse aus session_state (falls vorhanden).
+    Der Mock aus main.py ("mock") zaehlt nicht als echte Daten - der Tab
+    zeigt dann denselben Hinweis wie bei komplett fehlenden Daten."""
+    if st.session_state.get("training_data_source") in (None, "mock"):
+        st.info(
+            "Noch keine Trainingsdaten vorhanden. Lade oben einen Lauf hoch, "
+            "um deine HF-Zonen, Effizienzwerte und eine Trainingsempfehlung "
+            "zu sehen."
+        )
         return
 
     ef_factors = st.session_state.get(
@@ -339,6 +426,22 @@ def _render_results() -> None:
     col1, col2 = st.columns(2)
     col1.metric("Laengster Lauf", f"{st.session_state['max_distance_km']:.1f} km")
     col2.metric("Meiste Hoehenmeter", f"{st.session_state['max_elevation_m']:.0f} m")
+
+    if "hr_zone_boundaries" in st.session_state:
+        with st.expander("Deine HF-Zonen-Grenzen"):
+            bounds = st.session_state["hr_zone_boundaries"]
+            st.table(
+                pd.DataFrame(
+                    {
+                        "Zone": list(bounds.keys()),
+                        "Von (bpm)": [f"{lo:.0f}" for lo, _ in bounds.values()],
+                        "Bis (bpm)": [
+                            "∞" if hi == math.inf else f"{hi:.0f}"
+                            for _, hi in bounds.values()
+                        ],
+                    }
+                )
+            )
 
     display_terrain(st.session_state.get("training_df"), ef_factors)
     st.info(generate_recommendation(ef_factors))
