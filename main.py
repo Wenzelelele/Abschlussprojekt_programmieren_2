@@ -85,7 +85,7 @@ def _render_top_bar(info_help: str | None) -> None:
             st.write("E-Mail: bergläufer24@gmail.com")
             st.write("Telefon: +43 664 12345678")
 
-        st.image("data/berglaeufer_logo_transparent.png", width=80)
+        st.image("data/pictures/berglaeufer_logo_transparent.png", width=80)
 
 
 create_user_file()
@@ -112,7 +112,7 @@ else:
     tab_help = {"Route": ROUTE_TAB_HELP, "Trainingsdaten": TRAINING_TAB_HELP}
     _render_top_bar(info_help=tab_help.get(pg.title))
 
-    st.sidebar.image("data/berglaeufer_logo_transparent.png", width=180)
+    st.sidebar.image("data/pictures/berglaeufer_logo_transparent.png", width=180)
     logout_button()
 
     pg.run()

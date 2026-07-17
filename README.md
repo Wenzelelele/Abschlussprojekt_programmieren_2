@@ -2,11 +2,9 @@
 
 Eine Streamlit-App für Berglauf-Training und Streckenplanung. Trainingsläufe (GPX/FIT) werden hochgeladen und nach Geländeart (bergauf/flach/bergab) und Herzfrequenz-Zone ausgewertet. Auf dieser Grundlage plant die App neue Strecken: GPX-Datei hochladen, Ziel-HF-Zone oder Zielzeit angeben, und die App zeigt Karte, Höhenprofil und Pace-Prognose pro Streckenabschnitt an — inklusive Export als Garmin-FIT-Workout.
 
-![Profil-Tab](docs/screenshots/profil.png)
-![Route-Tab](docs/screenshots/route.png)
-
-> Screenshots noch einfügen (Ordner `docs/screenshots/`).
-
+![Profil Tab](data/pictures/Profil.png)
+![Route Tab](data/pictures/Routenplanung.png)
+![Training Tab](data/pictures/Trainingsdaten.png)
 ## Tabs
 
 - **Profil** – Zugangsdaten, persönliche Daten, BMI-Auswertung, Bearbeiten des eigenen Profils
