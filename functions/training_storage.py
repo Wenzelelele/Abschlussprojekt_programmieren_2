@@ -33,35 +33,35 @@ def _to_plain_floats(nested: dict) -> dict:
 
 
 def save_training_summary(
-    username: str,
+    person_id: str,
     ef_factors: dict,
     pace_hr_bins: dict,
     max_distance_km: float,
     max_elevation_m: float,
 ) -> None:
     """
-    Speichert (oder ueberschreibt) die Trainings-Aggregate eines Nutzers.
-    Ein Eintrag pro Nutzer - upsert statt insert, damit ein neuer Upload
+    Speichert (oder ueberschreibt) die Trainings-Aggregate einer Person.
+    Ein Eintrag pro person_id (stabile user_id aus dem Profil) - upsert statt insert, damit ein neuer Upload
     die alten Werte ersetzt und kein Verlauf entsteht.
     """
     User = Query()
     _get_table().upsert(
         {
-            "username": username,
+            "person_id": person_id,
             "ef_factors": _to_plain_floats(ef_factors),
             "pace_hr_bins": _to_plain_floats(pace_hr_bins),
             "max_distance_km": float(max_distance_km),
             "max_elevation_m": float(max_elevation_m),
             "updated_at": datetime.now().isoformat(timespec="seconds"),
         },
-        User.username == username,
+        User.person_id == person_id,
     )
 
 
-def load_training_summary(username: str) -> dict | None:
+def load_training_summary(person_id: str) -> dict | None:
     """
     Laedt die gespeicherten Aggregate eines Nutzers (fuer den Login-Fall).
     Gibt None zurueck, falls noch nichts gespeichert wurde.
     """
     User = Query()
-    return _get_table().get(User.username == username)
+    return _get_table().get(User.person_id == person_id)
