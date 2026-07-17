@@ -57,7 +57,10 @@ ROUTE_TAB_HELP = (
 )
 
 TRAINING_TAB_HELP = (
-    "Trainingsdaten-Tab: Lade einen aufgezeichneten Lauf hoch (GPX/FIT, "
+    "Trainingsdaten-Tab: Lade einen aufgezeichneten Lauf hoch (GPX/TCX/FIT, "
+    "direkt von Garmin oder Strava exportiert, im Browser auf Aktivitäten, "
+    "einzelne Aktivität öffnen, Exportieren -> GPX/TCX/FIT). "
+    "Die App liest die Pace- und HF-Daten aus der Datei aus (nur Dateien"
     "mit Zeitstempeln UND Herzfrequenz - keine reine Streckendatei). "
     "Wähle deine HF-Zonen-Methode (max. HF, Alter oder manuell). Die App "
     "berechnet daraus deine Effizienz je Geländeart (bergauf/flach/bergab) "
